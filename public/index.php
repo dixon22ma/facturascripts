@@ -31,6 +31,11 @@ if (!file_exists(__DIR__ . '/../vendor')) {
 
 require __DIR__ . '/../vendor/autoload.php';
 
+// Config.php present?
+if (file_exists(__DIR__ . '/../config.php')) {
+    require __DIR__ . '/../config.php';
+}
+
 // The check is to ensure we don't use .env in production
 if (!isset($_SERVER['FACTURASCRIPTS_ENV'])) {
     if (!class_exists(Dotenv::class)) {

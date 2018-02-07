@@ -25,13 +25,15 @@ class DefaultController extends TransitionController
      *
      * @Route("/", name="home_page")
      */
-    public function index()
+    public function index(Request $request)
     {
+        /// Is FacturaScripts installed?
         if (!file_exists(FS_FOLDER . DIRECTORY_SEPARATOR . 'config.php')) {
             return $this->redirect('/install');
         }
 
-        return $this->render('base.html.twig');
+        $this->init($request);
+        return $this->render('Login/Login.html.twig', $this->getRenderParams());
     }
 
     /**
@@ -42,7 +44,9 @@ class DefaultController extends TransitionController
     public function install(Request $request)
     {
         $installer = new Installer();
-        define('FS_LANG', $request->get('fs_lang', $installer->getUserLanguage()));
+        if (!defined('FS_LANG')) {
+            define('FS_LANG', $request->get('fs_lang', $installer->getUserLanguage()));
+        }
         $i18n = new Translator();
 
         $errors = [];

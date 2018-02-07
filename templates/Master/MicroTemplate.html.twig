@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{{ langcode2 }}" xml:lang="{{ langcode2 }}" >
+    <head>
+        {% block meta %}
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>{{ i18n.trans(title) | capitalize }}</title>
+        <meta name="description" content="{{ i18n.trans('meta-description') }}" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="generator" content="FacturaScripts" />
+        {% endblock %}
+        {% block icons %}{% endblock %}
+        {% block css %}
+        <link rel="stylesheet" href="{{ asset('node_modules/bootstrap/dist/css/bootstrap.min.css') }}" />
+        <link rel="stylesheet" href="{{ asset('node_modules/font-awesome/css/font-awesome.min.css') }}" />
+        {% endblock %}
+        {% block javascript %}
+        <script type="text/javascript" src="{{ asset('node_modules/jquery/dist/jquery.min.js') }}"></script>
+        <script type="text/javascript" src="{{ asset('node_modules/popper.js/dist/umd/popper.min.js') }}"></script>
+        <script type="text/javascript" src="{{ asset('node_modules/bootstrap/dist/js/bootstrap.min.js') }}"></script>
+        {% endblock %}
+    </head>
+    {% block fullBody %}
+    <body>
+        {% block messages %}{% endblock %}
+        {% block body %}{% endblock %}
+    </body>
+    {% endblock %}
+</html>
