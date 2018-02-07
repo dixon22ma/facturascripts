@@ -12,6 +12,7 @@
 /doc/
 /nbproject/
 /node_modules/
+/public/node_modules/
 /Plugins/
 /vendor/
 .DS_Store
@@ -36,3 +37,7 @@ package-lock.json
 .phpunit
 /phpunit.xml
 ###< symfony/phpunit-bridge ###
+
+###> symfony/web-server-bundle ###
+.web-server-pid
+###< symfony/web-server-bundle ###
