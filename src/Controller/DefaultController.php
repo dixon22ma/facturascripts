@@ -6,7 +6,10 @@
  */
 namespace FacturaScripts\Controller;
 
-Use FacturaScripts\Base\TransitionController;
+use FacturaScripts\Base\Installer;
+use FacturaScripts\Base\TransitionController;
+use FacturaScripts\Core\Base\Translator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -34,71 +37,28 @@ class DefaultController extends TransitionController
     /**
      * Matches /install exactly
      *
-     * @Route("/install", name="home_page")
+     * @Route("/install", name="install")
      */
-    public function install()
+    public function install(Request $request)
     {
+        $installer = new Installer();
+        define('FS_LANG', $request->get('fs_lang', $installer->getUserLanguage()));
+        $i18n = new Translator();
+
+        $errors = [];
+        if ($request->getMethod() === 'POST' && $installer->install($errors, $i18n, $request)) {
+            return $this->redirect('/');
+        }
+
         $params = [
-            'errors' => [],
-            'i18n' => $this->get('translator'),
-            'languages' => $this->getAvailableLanguages(),
+            'errors' => $errors,
+            'i18n' => $i18n,
+            'languages' => $installer->getAvailableLanguages($i18n),
             'license' => file_get_contents(FS_FOLDER . DIRECTORY_SEPARATOR . 'COPYING'),
-            'memcache_prefix' => $this->randomString(8),
-            'timezones' => $this->getTimezoneList(),
-            'userLangCode' => 'en'
+            'memcache_prefix' => $installer->randomString(8),
+            'timezones' => $installer->getTimezoneList(),
+            'userLangCode' => FS_LANG
         ];
-
         return $this->render('Installer/Install.html.twig', $params);
-    }
-
-    /**
-     * Returns an array with the languages with available translations.
-     *
-     * @return array
-     */
-    private function getAvailableLanguages()
-    {
-        $languages = [];
-        $dir = FS_FOLDER . '/Core/Translation';
-        foreach (scandir($dir, SCANDIR_SORT_ASCENDING) as $fileName) {
-            if ($fileName !== '.' && $fileName !== '..' && !is_dir($fileName) && substr($fileName, -5) === '.json') {
-                $key = substr($fileName, 0, -5);
-                $languages[$key] = $this->get('translator')->trans('languages-' . substr($fileName, 0, -5));
-            }
-        }
-
-        return $languages;
-    }
-
-    /**
-     * Timezones list with GMT offset
-     *
-     * @return array
-     *
-     * @link http://stackoverflow.com/a/9328760
-     */
-    private function getTimezoneList()
-    {
-        $zonesArray = [];
-        $timestamp = time();
-        foreach (timezone_identifiers_list() as $key => $zone) {
-            date_default_timezone_set($zone);
-            $zonesArray[$key]['zone'] = $zone;
-            $zonesArray[$key]['diff_from_GMT'] = 'UTC/GMT ' . date('P', $timestamp);
-        }
-
-        return $zonesArray;
-    }
-
-    /**
-     * Return a random string
-     *
-     * @param int $length
-     *
-     * @return bool|string
-     */
-    private function randomString($length = 20)
-    {
-        return substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'), 0, $length);
     }
 }

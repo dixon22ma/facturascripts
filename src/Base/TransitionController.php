@@ -15,5 +15,8 @@ use Symfony\Bundle\FrameworkBundle\Controller\Controller;
  */
 class TransitionController extends Controller
 {
-    //put your code here
+    protected function init()
+    {
+        
+    }
 }
