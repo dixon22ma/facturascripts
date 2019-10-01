@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A currency with its symbol and its conversion rate with respect to the euro.
@@ -37,6 +34,13 @@ class Divisa extends Base\ModelClass
      * @var string
      */
     public $coddivisa;
+
+    /**
+     * ISO 4217 code in number: http://en.wikipedia.org/wiki/ISO_4217
+     *
+     * @var string
+     */
+    public $codiso;
 
     /**
      * Currency description.
@@ -60,38 +64,11 @@ class Divisa extends Base\ModelClass
     public $tasaconvcompra;
 
     /**
-     * ISO 4217 code in number: http://en.wikipedia.org/wiki/ISO_4217
-     *
-     * @var string
-     */
-    public $codiso;
-
-    /**
      * Symbol representing the currency.
      *
      * @var string
      */
     public $simbolo;
-
-    /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
-    {
-        return 'divisas';
-    }
-
-    /**
-     * Returns the name of the column that is the primary key of the model.
-     *
-     * @return string
-     */
-    public static function primaryColumn()
-    {
-        return 'coddivisa';
-    }
 
     /**
      * Reset the values of all model properties.
@@ -106,13 +83,48 @@ class Divisa extends Base\ModelClass
     }
 
     /**
-     * Returns True if is the default currency for the company.
+     * Removed currency from database.
+     * 
+     * @return bool
+     */
+    public function delete()
+    {
+        if ($this->isDefault()) {
+            $this->toolBox()->i18nLog()->warning('cant-delete-default-currency');
+            return false;
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * Returns True if this is the default currency.
      *
      * @return bool
      */
     public function isDefault()
     {
-        return $this->coddivisa === AppSettings::get('default', 'coddivisa');
+        return $this->coddivisa === $this->toolBox()->appSettings()->get('default', 'coddivisa');
+    }
+
+    /**
+     * Returns the name of the column that is the primary key of the model.
+     *
+     * @return string
+     */
+    public static function primaryColumn()
+    {
+        return 'coddivisa';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'divisas';
     }
 
     /**
@@ -122,23 +134,26 @@ class Divisa extends Base\ModelClass
      */
     public function test()
     {
-        $status = false;
-        $this->descripcion = Utils::noHtml($this->descripcion);
-        $this->simbolo = Utils::noHtml($this->simbolo);
+        $utils = $this->toolBox()->utils();
+        $this->descripcion = $utils->noHtml($this->descripcion);
+        $this->simbolo = $utils->noHtml($this->simbolo);
 
         if (!preg_match('/^[A-Z0-9]{1,3}$/i', $this->coddivisa)) {
-            self::$miniLog->alert(self::$i18n->trans('bage-cod-invalid'));
-        } elseif ($this->codiso !== null && !preg_match('/^[A-Z0-9]{1,3}$/i', $this->codiso)) {
-            self::$miniLog->alert(self::$i18n->trans('iso-cod-invalid'));
-        } elseif ($this->tasaconv === 0) {
-            self::$miniLog->alert(self::$i18n->trans('conversion-rate-not-0'));
-        } elseif ($this->tasaconvcompra === 0) {
-            self::$miniLog->alert(self::$i18n->trans('conversion-rate-pruchases-not-0'));
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->coddivisa, '%column%' => 'coddivisa', '%min%' => '1', '%max%' => '3']
+            );
+        } elseif ($this->codiso !== null && !preg_match('/^[A-Z0-9]{1,5}$/i', $this->codiso)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codiso, '%column%' => 'codiso', '%min%' => '1', '%max%' => '5']
+            );
+        } elseif ($this->tasaconv === 0.0 || $this->tasaconvcompra === 0.0) {
+            $this->toolBox()->i18nLog()->warning('conversion-rate-not-0');
         } else {
-            self::$cache->delete('m_divisa_all');
-            $status = true;
+            return parent::test();
         }
 
-        return $status;
+        return false;
     }
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2018-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,48 +10,44 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * Initial description for the controller EditCuenta
- *
- * @author PC REDNET S.L. luismi@pcrednet.com>
+ * @author PC REDNET S.L.       <luismi@pcrednet.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
 -->
-
 <view>
     <columns>
-        <group name="data" numcolumns="9">
+        <group name="primary-data" numcolumns="12">
             <column name="id" order="100" display="none">
-                <widget type="text" fieldname="idcuenta" onclick="" />
+                <widget type="text" fieldname="idcuenta" />
             </column>
-            <column name="account" numcolumns="3" order="100">
-                <widget type="text" fieldname="codcuenta" maxlength="10" icon="fa-bar-chart" onclick="" />
+            <column name="account" numcolumns="3" order="110">
+                <widget type="text" fieldname="codcuenta" icon="fas fa-hashtag" maxlength="10" readonly="dinamic" required="true" />
             </column>
-            <column name="description" order="110">
-                <widget type="text" fieldname="descripcion" onclick="" />
+            <column name="description" order="120">
+                <widget type="text" fieldname="descripcion" required="true" />
             </column>
         </group>
-        <group name="data2" numcolumns="3">
-            <column name="fiscal-exercise" order="100">
-                <widget type="select" fieldname="codejercicio" required="true">
+        <group name="seccondary-data" numcolumns="12">
+            <column name="parent-account" numcolumns="3" order="100">
+                <widget type="autocomplete" fieldname="parent_idcuenta" onclick="EditCuenta" icon="fas fa-book">
+                    <values source="cuentas" fieldcode="idcuenta" fieldtitle="codcuenta"></values>
+                </widget>
+            </column>
+            <column name="fiscal-exercise" numcolumns="3" order="110">
+                <widget type="select" fieldname="codejercicio" onclick="EditEjercicio" readonly="dinamic" required="true">
                     <values source="ejercicios" fieldcode="codejercicio" fieldtitle="nombre"></values>
                 </widget>
             </column>
-        </group>
-        <group name="others" numcolumns="9">
-            <column name="parent-account" numcolumns="3" order="100">
-                <widget type="text" fieldname="parent_codcuenta" maxlength="10" icon="fa-bar-chart" />
-            </column>
-            <column name="special-account-id" numcolumns="7" order="120">
-                <widget type="select" fieldname="idcuentaesp">
-                    <values source="co_cuentasesp" fieldcode="idcuentaesp" fieldtitle="descripcion"></values>
+            <column name="special-account" titleurl="ListCuenta?activetab=ListCuentaEspecial" order="120">
+                <widget type="select" fieldname="codcuentaesp" onclick="EditCuentaEspecial">
+                    <values source="cuentasesp" fieldcode="codcuentaesp" fieldtitle="descripcion"></values>
                 </widget>
             </column>
         </group>
     </columns>
 </view>
-

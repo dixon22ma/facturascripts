@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,63 +10,35 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\BaseView;
+use FacturaScripts\Core\Lib\ExtendedController\EditController;
 
 /**
  * Controller to edit a single item from the Familia model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
- * @author Fco. Antobnio Moreno Pérez <famphuelva@gmail.com>
+ * @author Carlos García Gómez          <carlos@facturascripts.com>
+ * @author Artex Trading sa             <jcuello@artextrading.com>
+ * @author Fco. Antonio Moreno Pérez    <famphuelva@gmail.com>
  */
-class EditFamilia extends ExtendedController\PanelController
+class EditFamilia extends EditController
 {
-    /**
-     * Load views
-     */
-    protected function createViews()
-    {
-        $this->addEditView('\FacturaScripts\Dinamic\Model\Familia', 'EditFamilia', 'family');
-        $this->addListView('\FacturaScripts\Dinamic\Model\Familia', 'ListFamilia', 'families-children', 'fa-level-down');
-        $this->addListView('\FacturaScripts\Dinamic\Model\Articulo', 'ListArticulo', 'products', 'fa-cubes');
-    }
 
     /**
-     * Load view data procedure
-     *
-     * @param string                      $keyView
-     * @param ExtendedController\EditView $view
+     * 
+     * @return string
      */
-    protected function loadData($keyView, $view)
+    public function getModelClassName()
     {
-        switch ($keyView) {
-            case 'EditFamilia':
-                $code = $this->request->get('code');
-                $view->loadData($code);
-                break;
-
-            case 'ListArticulo':
-                $codfamilia = $this->getViewModelValue('EditFamilia', 'codfamilia');
-                $where = [new DataBaseWhere('codfamilia', $codfamilia)];
-                $view->loadData(false, $where);
-                break;
-
-            case 'ListFamilia':
-                $codfamilia = $this->getViewModelValue('EditFamilia', 'codfamilia');
-                $where = [new DataBaseWhere('madre', $codfamilia)];
-                $view->loadData(false, $where);
-                break;
-        }
+        return 'Familia';
     }
 
     /**
@@ -76,12 +48,81 @@ class EditFamilia extends ExtendedController\PanelController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'family';
-        $pagedata['menu'] = 'warehouse';
-        $pagedata['icon'] = 'fa-object-group';
-        $pagedata['showonmenu'] = false;
+        $data = parent::getPageData();
+        $data['menu'] = 'warehouse';
+        $data['title'] = 'family';
+        $data['icon'] = 'fas fa-sitemap';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createFamilyView($viewName = 'ListFamilia')
+    {
+        $this->addListView($viewName, 'Familia', 'families', 'fas fa-level-down-alt');
+        $this->views[$viewName]->addOrderBy(['codfamilia'], 'code');
+
+        /// disable column
+        $this->views[$viewName]->disableColumn('parent');
+
+        /// disable button
+        $this->setSettings($viewName, 'btnDelete', false);
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createProductView($viewName = 'ListProducto')
+    {
+        $this->addListView($viewName, 'Producto', 'products', 'fas fa-cubes');
+        $this->views[$viewName]->addOrderBy(['referencia'], 'reference', 1);
+        $this->views[$viewName]->addOrderBy(['precio'], 'price');
+        $this->views[$viewName]->addOrderBy(['stock'], 'stock');
+        $this->views[$viewName]->searchFields = ['referencia', 'descripcion'];
+
+        /// disable column
+        $this->views[$viewName]->disableColumn('family');
+    }
+
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        parent::createViews();
+        $this->setTabsPosition('bottom');
+
+        /// more tabs
+        $this->createProductView();
+        $this->createFamilyView();
+    }
+
+    /**
+     * Load view data procedure
+     *
+     * @param string   $viewName
+     * @param BaseView $view
+     */
+    protected function loadData($viewName, $view)
+    {
+        $codfamilia = $this->getViewModelValue($this->getMainViewName(), 'codfamilia');
+        switch ($viewName) {
+            case 'ListProducto':
+                $where = [new DataBaseWhere('codfamilia', $codfamilia)];
+                $view->loadData('', $where);
+                break;
+
+            case 'ListFamilia':
+                $where = [new DataBaseWhere('madre', $codfamilia)];
+                $view->loadData('', $where);
+                break;
+
+            default:
+                parent::loadData($viewName, $view);
+                break;
+        }
     }
 }

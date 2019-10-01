@@ -1,3 +1,4 @@
-codserie;descripcion;siniva;irpf
-"A";"SERIE A";false;"0"
-"R";"RECTIFICATIVAS";false;"0"
+codserie;descripcion;siniva
+"A";"General";false
+"R";"Rectificativas";false
+"S";"Simplificadas";false

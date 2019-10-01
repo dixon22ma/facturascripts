@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,54 +10,75 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\App;
 
+use Exception;
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Dinamic\Model\ApiAccess;
+use FacturaScripts\Dinamic\Model\ApiKey;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * AppAPI is the class used for API.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
+ * @author Carlos García Gómez                                  <carlos@facturascripts.com>
+ * @author Ángel Guzmán Maeso                                   <angel@guzmanmaeso.com>
+ * @author Rafael San José Tovar (http://www.x-netdigital.com)  <info@rsanjoseo.com>
  */
 class AppAPI extends App
 {
+
+    const API_VERSION = 3;
+
+    /**
+     * Contains the ApiKey model
+     *
+     * @var ApiKey $apiKey
+     */
+    protected $apiKey;
+
+    /**
+     * Returns the data into the standard output.
+     */
+    public function render()
+    {
+        $this->response->headers->set('Access-Control-Allow-Origin', '*');
+        $this->response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+        $this->response->headers->set('Content-Type', 'application/json');
+
+        $allowHeaders = $this->request->server->get('HTTP_ACCESS_CONTROL_REQUEST_HEADERS');
+        if ($this->request->server->get('REQUEST_METHOD') == "OPTIONS" && !is_null($allowHeaders)) {
+            $this->response->headers->set('Access-Control-Allow-Headers', $allowHeaders);
+        } else {
+            parent::render();
+        }
+    }
 
     /**
      * Runs the API.
      *
      * @return bool
      */
-    public function run()
+    public function run(): bool
     {
-        $this->response->headers->set('Access-Control-Allow-Origin', '*');
-        $this->response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-        $this->response->headers->set('Content-Type', 'application/json');
-
-        if ($this->isDisabled()) {
-            $this->response->setStatusCode(Response::HTTP_NOT_FOUND);
-            $this->response->setContent(json_encode(['error' => 'API-DISABLED']));
-
+        if (!parent::run()) {
             return false;
-        }
-
-        if (!$this->dataBase->connected()) {
-            $this->response->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR);
-            $this->response->setContent(json_encode(['error' => 'DB-ERROR']));
-
+        } elseif ($this->isDisabled()) {
+            $this->die(Response::HTTP_NOT_FOUND, 'api-disabled');
             return false;
-        }
-
-        if ($this->isIPBanned()) {
-            $this->response->setStatusCode(Response::HTTP_FORBIDDEN);
-            $this->response->setContent(json_encode(['error' => 'IP-BANNED']));
-
+        } elseif (!$this->checkAuthToken()) {
+            $this->ipWarning();
+            $this->die(Response::HTTP_FORBIDDEN, 'auth-token-invalid');
+            return false;
+        } elseif (!$this->isAllowed()) {
+            $this->ipWarning();
+            $this->die(Response::HTTP_FORBIDDEN, 'forbidden');
             return false;
         }
 
@@ -65,30 +86,157 @@ class AppAPI extends App
     }
 
     /**
-     * Check if API is disabled
-     *
-     * @return mixed
-     */
-    private function isDisabled()
-    {
-        return $this->settings->get('default', 'enable_api', false) !== 'true';
-    }
-
-    /**
-     * Selects the API version if it is supported
+     * Check authentication using one of the supported tokens.
+     * In the header you have to pass a token using the header 'Token' or the
+     * standard 'X-Auth-Token', returning true if the token passed by any of
+     * those headers is valid.
+     * 
+     * We can define a master API KEY in the config.php by defining the constant
+     * FS_API_KEY.
      *
      * @return bool
      */
-    private function selectVersion()
+    private function checkAuthToken(): bool
     {
-        if ($this->getUriParam(1) === '3') {
-            return $this->selectResource();
+        $this->apiKey = new ApiKey();
+        $altToken = $this->request->headers->get('Token', '');
+        $token = $this->request->headers->get('X-Auth-Token', $altToken);
+        if (empty($token)) {
+            return false;
         }
 
-        $this->response->setStatusCode(Response::HTTP_NOT_FOUND);
-        $this->response->setContent(json_encode(['error' => 'API-VERSION-NOT-FOUND']));
+        if (defined('FS_API_KEY') && $token == \FS_API_KEY) {
+            $this->apiKey->apikey = \FS_API_KEY;
+            $this->apiKey->fullaccess = true;
+            return true;
+        }
 
-        return true;
+        $where = [
+            new DataBaseWhere('apikey', $token),
+            new DataBaseWhere('enabled', true)
+        ];
+        return $this->apiKey->loadFromCode('', $where);
+    }
+
+    /**
+     * 
+     * @param int    $status
+     * @param string $message
+     */
+    protected function die(int $status, string $message = '')
+    {
+        $content = $this->toolBox()->i18n()->trans($message);
+        foreach ($this->toolBox()->log()->readAll() as $log) {
+            $content .= empty($content) ? $log["message"] : "\n" . $log["message"];
+        }
+
+        $this->response->setContent(json_encode(['error' => $content]));
+        $this->response->setStatusCode($status);
+    }
+
+    /**
+     * Expose resource.
+     *
+     * @param array $map
+     */
+    private function exposeResources(&$map)
+    {
+        $json = ['resources' => []];
+        foreach (array_keys($map) as $key) {
+            $json['resources'][] = $key;
+        }
+
+        $this->response->setContent(json_encode($json));
+    }
+
+    /**
+     * Go through all the files in the /Dinamic/Lib/API, collecting the name of
+     * all available resources in each of them, and adding them to an array that
+     * is returned.
+     *
+     * @return array
+     */
+    private function getResourcesMap(): array
+    {
+        $resources = [[]];
+        // Loop all controllers in /Dinamic/Lib/API
+        foreach (scandir(\FS_FOLDER . DIRECTORY_SEPARATOR . 'Dinamic' . DIRECTORY_SEPARATOR . 'Lib' . DIRECTORY_SEPARATOR . 'API', SCANDIR_SORT_NONE) as $resource) {
+            if (substr($resource, -4) !== '.php') {
+                continue;
+            }
+
+            // The name of the class will be the same as that of the file without the php extension.
+            // Classes will be descendants of Base/APIResourceClass.
+            $class = substr('\\FacturaScripts\\Dinamic\\Lib\\API\\' . $resource, 0, -4);
+            $APIClass = new $class($this->response, $this->request, []);
+            if (isset($APIClass) && method_exists($APIClass, 'getResources')) {
+                // getResources obtains an associative array of arrays generated
+                // with setResource ('name'). These arrays keep the name of the class
+                // and the resource so that they can be invoked later.
+                //
+                // This allows using different API extensions, and not just the
+                // usual Lib/API/APIModel.
+                $resources[] = $APIClass->getResources();
+            }
+        }
+
+        // Returns an ordered array with all available resources.
+        $finalResources = array_merge(...$resources);
+        ksort($finalResources);
+        return $finalResources;
+    }
+
+    /**
+     * Returns true if the token has the requested access to the resource.
+     *
+     * @return bool
+     */
+    private function isAllowed(): bool
+    {
+        $resource = $this->getUriParam(2);
+        if ($resource === '' || $this->apiKey->fullaccess) {
+            return true;
+        }
+
+        $apiAccess = new ApiAccess();
+        $where = [
+            new DataBaseWhere('idapikey', $this->apiKey->id),
+            new DataBaseWhere('resource', $resource)
+        ];
+        if ($apiAccess->loadFromCode('', $where)) {
+            switch ($this->request->getMethod()) {
+                case 'DELETE':
+                    return $apiAccess->allowdelete;
+
+                case 'GET':
+                    return $apiAccess->allowget;
+
+                case 'PATCH':
+                case 'PUT':
+                    return $apiAccess->allowput;
+
+                case 'POST':
+                    return $apiAccess->allowpost;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if API is disabled. API can't be disabled if FS_API_KEY is defined
+     * in the config.php file.
+     *
+     * @return bool
+     */
+    private function isDisabled(): bool
+    {
+        /// Is FS_API_KEY defined in the config?
+        if (defined('FS_API_KEY')) {
+            return false;
+        }
+
+        return $this->toolBox()->appSettings()->get('default', 'enable_api', false) == false;
     }
 
     /**
@@ -96,198 +244,53 @@ class AppAPI extends App
      *
      * @return bool
      */
-    private function selectResource()
+    private function selectResource(): bool
     {
         $map = $this->getResourcesMap();
 
         $resourceName = $this->getUriParam(2);
         if ($resourceName === '') {
+            // If no command, expose resources and exit
             $this->exposeResources($map);
-
             return true;
         }
 
-        $modelName = 'FacturaScripts\\Dinamic\\Model\\' . $map[$resourceName];
-        $cod = $this->getUriParam(3);
-
-        if ($cod === '') {
-            return $this->processResource($modelName);
+        if (!isset($map[$resourceName]['API'])) {
+            $this->die(Response::HTTP_BAD_REQUEST, 'invalid-resource');
+            return false;
         }
 
-        return $this->processResourceParam($modelName, $cod);
-    }
-
-    /**
-     * This method is equivalent to $this->request->get($key, $default),
-     * but always return an array, as expected for some parameters like operation, filter or sort.
-     *
-     * @param string $key
-     * @param string $default
-     *
-     * @return array
-     */
-    private function getRequestArray($key, $default = '')
-    {
-        $array = $this->request->get($key, $default);
-
-        return is_array($array) ? $array : []; /// if is string has bad format
-    }
-
-    /**
-     * Returns the where clauses.
-     *
-     * @param array  $filter
-     * @param array  $operation
-     * @param string $defaultOperation
-     *
-     * @return DataBaseWhere[]
-     */
-    private function getWhereValues($filter, $operation, $defaultOperation = 'AND')
-    {
-        $where = [];
-        foreach ($filter as $key => $value) {
-            if (!isset($operation[$key])) {
-                $operation[$key] = $defaultOperation;
-            }
-            $where[] = new DataBaseWhere($key, $value, 'LIKE', $operation[$key]);
+        /// get params
+        $param = 3;
+        $params = [];
+        while (($item = $this->getUriParam($param)) !== '') {
+            $params[] = $item;
+            $param++;
         }
 
-        return $where;
+        try {
+            $APIClass = new $map[$resourceName]['API']($this->response, $this->request, $params);
+            return $APIClass->processResource($map[$resourceName]['Name']);
+        } catch (Exception $exc) {
+            $this->toolBox()->log()->critical('API-ERROR: ' . $exc->getMessage());
+            $this->die(Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return false;
     }
 
     /**
-     * Process the resource, allowing POST/PUT/DELETE/GET ALL actions
-     *
-     * @param string $modelName
+     * Selects the API version if it is supported
      *
      * @return bool
      */
-    private function processResource($modelName)
+    private function selectVersion(): bool
     {
-        try {
-            $model = new $modelName();
-            $offset = (int) $this->request->get('offset', 0);
-            $limit = (int) $this->request->get('limit', 50);
-            $operation = $this->getRequestArray('operation');
-            $filter = $this->getRequestArray('filter');
-            $order = $this->getRequestArray('sort');
-            $where = $this->getWhereValues($filter, $operation);
-
-            switch ($this->request->getMethod()) {
-                case 'POST':
-                    $data = [];
-                    break;
-
-                case 'PUT':
-                    $data = [];
-                    break;
-
-                case 'DELETE':
-                    $data = [];
-                    break;
-
-                default:
-                    $data = $model->all($where, $order, $offset, $limit);
-                    break;
-            }
-
-            $this->response->setContent(json_encode($data));
-
-            return true;
-        } catch (\Exception $ex) {
-            $this->response->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR);
-            $this->response->setContent(json_encode(['error' => 'API-ERROR']));
-
-            return false;
-        }
-    }
-
-    /**
-     * Process resource with parameters
-     *
-     * @param string $modelName
-     * @param string $cod
-     *
-     * @return bool
-     */
-    private function processResourceParam($modelName, $cod)
-    {
-        try {
-            $model = new $modelName();
-
-            switch ($this->request->getMethod()) {
-                case 'POST':
-                    $data = [];
-                    break;
-
-                case 'PUT':
-                    $data = [];
-                    break;
-
-                case 'DELETE':
-                    $object = $model->get($cod);
-                    $data = $object->delete();
-                    break;
-
-                default:
-                    $data = $model->get($cod);
-                    break;
-            }
-
-            $this->response->setContent(json_encode($data));
-
-            return true;
-        } catch (\Exception $ex) {
-            $this->response->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR);
-            $this->response->setContent(json_encode(['error' => 'API-ERROR']));
-
-            return false;
-        }
-    }
-
-    /**
-     * Load resource map
-     *
-     * @return array
-     */
-    private function getResourcesMap()
-    {
-        $resources = [];
-        foreach (scandir(FS_FOLDER . '/Dinamic/Model', SCANDIR_SORT_ASCENDING) as $fName) {
-            if (substr($fName, -4) === '.php') {
-                $modelName = substr($fName, 0, -4);
-
-                /// Conversion to plural
-                if (substr($modelName, -1) === 's') {
-                    $plural = strtolower($modelName);
-                } elseif (substr($modelName, -3) === 'ser' || substr($modelName, -4) === 'tion') {
-                    $plural = strtolower($modelName) . 's';
-                } elseif (in_array(substr($modelName, -1), ['a', 'e', 'i', 'o', 'u', 'k'], false)) {
-                    $plural = strtolower($modelName) . 's';
-                } else {
-                    $plural = strtolower($modelName) . 'es';
-                }
-
-                $resources[$plural] = $modelName;
-            }
+        if ($this->getUriParam(1) == self::API_VERSION) {
+            return $this->selectResource();
         }
 
-        return $resources;
-    }
-
-    /**
-     * Expose resource
-     *
-     * @param array $map
-     */
-    private function exposeResources(&$map)
-    {
-        $json = ['resources' => []];
-
-        foreach (array_keys($map) as $key) {
-            $json['resources'][] = $key;
-        }
-
-        $this->response->setContent(json_encode($json));
+        $this->die(Response::HTTP_NOT_FOUND, 'api-version-not-found');
+        return true;
     }
 }

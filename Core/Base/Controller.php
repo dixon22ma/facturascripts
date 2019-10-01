@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,18 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Base;
 
-use FacturaScripts\Core\Lib\AssetManager;
-use FacturaScripts\Core\Model;
+use FacturaScripts\Dinamic\Lib\AssetManager;
+use FacturaScripts\Dinamic\Lib\MultiRequestProtection;
+use FacturaScripts\Dinamic\Model\Empresa;
+use FacturaScripts\Dinamic\Model\User;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,20 +33,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class Controller
 {
-
-    /**
-     * Contains a list of extra files to load: javascript, css, etc.
-     *
-     * @var array
-     */
-    public $assets;
-
-    /**
-     * Cache access manager.
-     *
-     * @var Cache
-     */
-    protected $cache;
 
     /**
      * Name of the class of the controller (although its in inheritance from this class,
@@ -62,22 +50,16 @@ class Controller
     protected $dataBase;
 
     /**
-     * Tools to work with currencies.
-     *
-     * @var DivisaTools
-     */
-    public $divisaTools;
-
-    /**
      * Selected company.
      *
-     * @var Model\Empresa|false
+     * @var Empresa
      */
     public $empresa;
 
     /**
      * Translator engine.
      *
+     * @deprecated since version 2018.09
      * @var Translator
      */
     protected $i18n;
@@ -85,16 +67,16 @@ class Controller
     /**
      * App log manager.
      *
+     * @deprecated since version 2018.09
      * @var MiniLog
      */
     protected $miniLog;
 
     /**
-     * Tools to work with numbers.
      *
-     * @var NumberTools
+     * @var MultiRequestProtection
      */
-    public $numberTools;
+    public $multiRequestProtection;
 
     /**
      * User permissions on this controller.
@@ -132,48 +114,69 @@ class Controller
     public $title;
 
     /**
+     * Given uri, default is empty.
+     *
+     * @var string
+     */
+    public $uri;
+
+    /**
      * User logged in.
      *
-     * @var Model\User
+     * @var User|false
      */
-    public $user;
+    public $user = false;
 
     /**
      * Initialize all objects and properties.
      *
-     * @param Cache      $cache
-     * @param Translator $i18n
-     * @param MiniLog    $miniLog
-     * @param string     $className
+     * @param string $className
+     * @param string $uri
      */
-    public function __construct(&$cache, &$i18n, &$miniLog, $className)
+    public function __construct(string $className, string $uri = '')
     {
-        $this->assets = AssetManager::getAssetsForPage($className);
-        $this->cache = &$cache;
         $this->className = $className;
         $this->dataBase = new DataBase();
-        $this->divisaTools = new DivisaTools();
-        $this->i18n = &$i18n;
-        $this->miniLog = &$miniLog;
-        $this->numberTools = new NumberTools();
+        $this->empresa = new Empresa();
+        $this->i18n = $this->toolBox()->i18n();
+        $this->miniLog = $this->toolBox()->log();
+        $this->multiRequestProtection = new MultiRequestProtection();
         $this->request = Request::createFromGlobals();
         $this->template = $this->className . '.html.twig';
+        $this->uri = $uri;
 
-        $this->title = $this->className;
         $pageData = $this->getPageData();
-        if (!empty($pageData)) {
-            $this->title = $pageData['title'];
-        }
+        $this->title = empty($pageData) ? $this->className : $this->toolBox()->i18n()->trans($pageData['title']);
+
+        AssetManager::clear();
+        AssetManager::setAssetsForPage($className);
     }
 
     /**
-     * Return the name of the controller.
-     *
-     * @return string
+     * 
+     * @param mixed $extension
      */
-    protected function getClassName()
+    public static function addExtension($extension)
     {
-        return $this->className;
+        static::toolBox()->i18nLog()->error('no-extension-support', ['%className%' => static::class]);
+    }
+
+    /**
+     * Return the basic data for this page.
+     *
+     * @return array
+     */
+    public function getPageData()
+    {
+        return [
+            'name' => $this->className,
+            'title' => $this->className,
+            'icon' => 'fas fa-circle',
+            'menu' => 'new',
+            'submenu' => null,
+            'showonmenu' => true,
+            'ordernum' => 100,
+        ];
     }
 
     /**
@@ -187,20 +190,73 @@ class Controller
     }
 
     /**
-     * Returns a field value for the loaded data model
-     *
-     * @param mixed  $model
-     * @param string $fieldName
+     * 
+     * @param string $name
+     * @param array  $arguments
      *
      * @return mixed
      */
-    public function getFieldValue($model, $fieldName)
+    public function pipe($name, ...$arguments)
     {
-        if (isset($model->{$fieldName})) {
-            return $model->{$fieldName};
-        }
-
+        $this->toolBox()->i18nLog()->error('no-extension-support', ['%className%' => static::class]);
         return null;
+    }
+
+    /**
+     * Runs the controller's private logic.
+     *
+     * @param Response              $response
+     * @param User                  $user
+     * @param ControllerPermissions $permissions
+     */
+    public function privateCore(&$response, $user, $permissions)
+    {
+        $this->permissions = $permissions;
+        $this->response = &$response;
+        $this->user = $user;
+
+        /// Select the default company for the user
+        $this->empresa->loadFromCode($this->user->idempresa);
+
+        /// This user have default page setted?
+        $defaultPage = $this->request->query->get('defaultPage', '');
+        if ($defaultPage === 'TRUE') {
+            $this->user->homepage = $this->className;
+            $this->response->headers->setCookie(new Cookie('fsHomepage', $this->user->homepage, time() + \FS_COOKIES_EXPIRE));
+            $this->user->save();
+        } elseif ($defaultPage === 'FALSE') {
+            $this->user->homepage = null;
+            $this->response->headers->setCookie(new Cookie('fsHomepage', $this->user->homepage, time() - \FS_COOKIES_EXPIRE));
+            $this->user->save();
+        }
+    }
+
+    /**
+     * Execute the public part of the controller.
+     *
+     * @param Response $response
+     */
+    public function publicCore(&$response)
+    {
+        $this->response = &$response;
+        $this->template = 'Login/Login.html.twig';
+
+        $idempresa = $this->toolBox()->appSettings()->get('default', 'idempresa');
+        $this->empresa->loadFromCode($idempresa);
+    }
+
+    /**
+     * Redirect to an url or controller.
+     * 
+     * @param string $url
+     * @param int    $delay
+     */
+    public function redirect($url, $delay = 0)
+    {
+        $this->response->headers->set('Refresh', $delay . '; ' . $url);
+        if ($delay === 0) {
+            $this->setTemplate(false);
+        }
     }
 
     /**
@@ -212,33 +268,17 @@ class Controller
      */
     public function setTemplate($template)
     {
-        if ($template === false) {
-            $this->template = false;
-
-            return true;
-        }
-
-        $this->template = $template . '.html.twig';
-
+        $this->template = ($template === false) ? false : $template . '.html.twig';
         return true;
     }
 
     /**
-     * Return the basic data for this page.
-     *
-     * @return array
+     * 
+     * @return ToolBox
      */
-    public function getPageData()
+    public static function toolBox()
     {
-        return [
-            'name' => $this->className,
-            'title' => $this->className,
-            'icon' => 'fa-circle-o',
-            'menu' => 'new',
-            'submenu' => null,
-            'showonmenu' => true,
-            'ordernum' => 100,
-        ];
+        return new ToolBox();
     }
 
     /**
@@ -252,43 +292,12 @@ class Controller
     }
 
     /**
-     * Execute the public part of the controller.
+     * Return the name of the controller.
      *
-     * @param Response $response
+     * @return string
      */
-    public function publicCore(&$response)
+    protected function getClassName(): string
     {
-        $this->response = &$response;
-        $this->template = 'Login/Login.html.twig';
-    }
-
-    /**
-     * Runs the controller's private logic.
-     *
-     * @param Response              $response
-     * @param Model\User            $user
-     * @param ControllerPermissions $permissions
-     */
-    public function privateCore(&$response, $user, $permissions)
-    {
-        $this->permissions = $permissions;
-        $this->response = &$response;
-        $this->user = $user;
-
-        /// Select the default company for the user
-        $empresaModel = new Model\Empresa();
-        $this->empresa = $empresaModel->get($this->user->idempresa);
-
-        /// This user have default page setted?
-        $defaultPage = $this->request->query->get('defaultPage', '');
-        if ($defaultPage === 'TRUE') {
-            $this->user->homepage = $this->className;
-            $this->response->headers->setCookie(new Cookie('fsHomepage', $this->user->homepage, time() + FS_COOKIES_EXPIRE));
-            $this->user->save();
-        } elseif ($defaultPage === 'FALSE') {
-            $this->user->homepage = null;
-            $this->response->headers->setCookie(new Cookie('fsHomepage', $this->user->homepage, time() - FS_COOKIES_EXPIRE));
-            $this->user->save();
-        }
+        return $this->className;
     }
 }

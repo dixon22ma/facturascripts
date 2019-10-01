@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2014-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2014-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,15 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
-use FacturaScripts\Core\Base\Utils;
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
 
 /**
  * Abbreviated detail of a balance.
@@ -28,14 +27,8 @@ use FacturaScripts\Core\Base\Utils;
  */
 class BalanceCuentaA extends Base\ModelClass
 {
-    use Base\ModelTrait;
 
-    /**
-     * Primary key.
-     *
-     * @var int
-     */
-    public $id;
+    use Base\ModelTrait;
 
     /**
      * Balance code.
@@ -59,13 +52,35 @@ class BalanceCuentaA extends Base\ModelClass
     public $desccuenta;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Primary key.
      *
+     * @var int
+     */
+    public $id;
+
+    /**
+     * Obtain all balances from the account by your balance code.
+     *
+     * @param string $cod
+     *
+     * @return static[]
+     */
+    public function allFromCodbalance($cod)
+    {
+        $where = [new DataBaseWhere('codbalance', $cod)];
+        return $this->all($where, ['codcuenta' => 'ASC'], 0, 0);
+    }
+
+    /**
+     * 
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'co_cuentascbba';
+        /// needed dependency
+        new Balance();
+
+        return parent::install();
     }
 
     /**
@@ -101,21 +116,21 @@ class BalanceCuentaA extends Base\ModelClass
         }
 
         if ($desde && $hasta) {
-            $extra .= ' AND idasiento IN (SELECT idasiento FROM co_asientos WHERE '
+            $extra .= ' AND idasiento IN (SELECT idasiento FROM asientos WHERE '
                 . 'fecha >= ' . self::$dataBase->var2str($desde) . ' AND '
                 . 'fecha <= ' . self::$dataBase->var2str($hasta) . ')';
         }
 
         if ($this->codcuenta === '129') {
-            $sql = "SELECT SUM(debe) AS debe, SUM(haber) AS haber FROM co_partidas
+            $sql = "SELECT SUM(debe) AS debe, SUM(haber) AS haber FROM partidas
             WHERE idsubcuenta IN (SELECT idsubcuenta FROM co_subcuentas
-              WHERE (codcuenta LIKE '6%' OR codcuenta LIKE '7%') 
+              WHERE (codcuenta LIKE '6%' OR codcuenta LIKE '7%')
                 AND codejercicio = " . self::$dataBase->var2str($ejercicio->codejercicio) . ')' . $extra . ';';
             $data = self::$dataBase->select($sql);
         } else {
-            $sql = "SELECT SUM(debe) AS debe, SUM(haber) AS haber FROM co_partidas
+            $sql = "SELECT SUM(debe) AS debe, SUM(haber) AS haber FROM partidas
             WHERE idsubcuenta IN (SELECT idsubcuenta FROM co_subcuentas
-               WHERE codcuenta LIKE '" . Utils::noHtml($this->codcuenta) . "%'"
+               WHERE codcuenta LIKE '" . $this->toolBox()->utils()->noHtml($this->codcuenta) . "%'"
                 . ' AND codejercicio = ' . self::$dataBase->var2str($ejercicio->codejercicio) . ')' . $extra . ';';
             $data = self::$dataBase->select($sql);
         }
@@ -128,48 +143,42 @@ class BalanceCuentaA extends Base\ModelClass
     }
 
     /**
-     * Obtain all balances from the account by your balance code.
+     * Search all balances of the account by its balance code.
      *
      * @param string $cod
      *
-     * @return self[]
+     * @return static[]
      */
-    public function allFromCodbalance($cod)
+    public function searchByCodbalance($cod)
     {
         $balist = [];
         $sql = 'SELECT * FROM ' . static::tableName()
-            . ' WHERE codbalance = ' . self::$dataBase->var2str($cod) . ' ORDER BY codcuenta ASC;';
+            . " WHERE codbalance LIKE '" . $this->toolBox()->utils()->noHtml($cod) . "%' ORDER BY codcuenta ASC;";
 
-        $data = self::$dataBase->select($sql);
-        if (!empty($data)) {
-            foreach ($data as $b) {
-                $balist[] = new self($b);
-            }
+        foreach (self::$dataBase->select($sql) as $row) {
+            $balist[] = new static($row);
         }
 
         return $balist;
     }
 
     /**
-     * Search all balances of the account by its balance code.
+     * Returns the name of the table that uses this model.
      *
-     * @param string $cod
-     *
-     * @return self[]
+     * @return string
      */
-    public function searchByCodbalance($cod)
+    public static function tableName()
     {
-        $balist = [];
-        $sql = 'SELECT * FROM ' . static::tableName()
-            . " WHERE codbalance LIKE '" . Utils::noHtml($cod) . "%' ORDER BY codcuenta ASC;";
+        return 'balancescuentasabreviadas';
+    }
 
-        $data = self::$dataBase->select($sql);
-        if (!empty($data)) {
-            foreach ($data as $b) {
-                $balist[] = new self($b);
-            }
-        }
-
-        return $balist;
+    /**
+     * 
+     * @return bool
+     */
+    public function test()
+    {
+        $this->desccuenta = $this->toolBox()->utils()->noHtml($this->desccuenta);
+        return parent::test();
     }
 }

@@ -7,28 +7,13 @@
 -->
 <table>
     <column>
-        <name>incporcentual</name>
-        <type>double precision</type>
-        <null>NO</null>
-    </column>
-    <column>
-        <name>inclineal</name>
-        <type>double precision</type>
-        <null>NO</null>
-    </column>
-    <column>
-        <name>aplicar_a</name>
+        <name>aplicar</name>
         <type>character varying(12)</type>
     </column>
     <column>
-        <name>nombre</name>
-        <type>character varying(50)</type>
+        <name>codtarifa</name>
+        <type>character varying(6)</type>
         <null>NO</null>
-    </column>
-    <column>
-        <name>mincoste</name>
-        <type>boolean</type>
-        <default>false</default>
     </column>
     <column>
         <name>maxpvp</name>
@@ -36,9 +21,22 @@
         <default>false</default>
     </column>
     <column>
-        <name>codtarifa</name>
-        <type>character varying(6)</type>
+        <name>mincoste</name>
+        <type>boolean</type>
+        <default>false</default>
+    </column>
+    <column>
+        <name>nombre</name>
+        <type>character varying(50)</type>
         <null>NO</null>
+    </column>
+    <column>
+        <name>valorx</name>
+        <type>double precision</type>
+    </column>
+    <column>
+        <name>valory</name>
+        <type>double precision</type>
     </column>
     <constraint>
         <name>tarifas_pkey</name>

@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2014-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2014-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,43 +10,28 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * Element of the third level of the accounting plan.
  * It is related to a single fiscal year and epigraph,
  * but it can be related to many subaccounts.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class Cuenta extends Base\ModelClass
 {
 
     use Base\ModelTrait;
-
-    /**
-     * Primary key.
-     *
-     * @var int
-     */
-    public $idcuenta;
-
-    /**
-     * Code of the exercise of this account.
-     *
-     * @var string
-     */
-    public $codejercicio;
 
     /**
      * Account code.
@@ -56,6 +41,20 @@ class Cuenta extends Base\ModelClass
     public $codcuenta;
 
     /**
+     * Identifier of the special account.
+     *
+     * @var string
+     */
+    public $codcuentaesp;
+
+    /**
+     * Code of the exercise of this account.
+     *
+     * @var string
+     */
+    public $codejercicio;
+
+    /**
      * Description of the account.
      *
      * @var string
@@ -63,11 +62,17 @@ class Cuenta extends Base\ModelClass
     public $descripcion;
 
     /**
-     * Identifier of the parent account
      *
-     * @var integer
+     * @var bool
      */
-    public $parent_idcuenta;
+    private static $disableAditionTest = false;
+
+    /**
+     * Primary key.
+     *
+     * @var int
+     */
+    public $idcuenta;
 
     /**
      * Parent account code
@@ -77,13 +82,63 @@ class Cuenta extends Base\ModelClass
     public $parent_codcuenta;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Identifier of the parent account
+     *
+     * @var integer
+     */
+    public $parent_idcuenta;
+
+    /**
+     * 
+     * @return Cuenta[]
+     */
+    public function getChildren()
+    {
+        $where = [new DataBaseWhere('parent_idcuenta', $this->idcuenta)];
+        return $this->all($where, ['codcuenta' => 'ASC'], 0, 0);
+    }
+
+    /**
+     * 
+     * @return Cuenta
+     */
+    public function getParent()
+    {
+        $parent = new Cuenta();
+        $parent->loadFromCode($this->parent_idcuenta);
+        return $parent;
+    }
+
+    /**
+     * 
+     * @return Subcuenta[]
+     */
+    public function getSubcuentas()
+    {
+        $subcuenta = new Subcuenta();
+        $where = [new DataBaseWhere('idcuenta', $this->idcuenta)];
+        return $subcuenta->all($where, ['codsubcuenta' => 'ASC'], 0, 0);
+    }
+
+    public function disableAditionalTest()
+    {
+        self::$disableAditionTest = true;
+    }
+
+    /**
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'co_cuentas';
+        /// force the parents tables
+        new CuentaEspecial();
+        new Ejercicio();
+
+        return parent::install();
     }
 
     /**
@@ -97,87 +152,22 @@ class Cuenta extends Base\ModelClass
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
+     * 
+     * @return string
+     */
+    public function primaryDescriptionColumn()
+    {
+        return 'codcuenta';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function install()
+    public static function tableName()
     {
-        /// force the parents tables
-        new Ejercicio();
-        new CuentaEspecial();
-
-        return '';
-    }
-
-    /**
-     * Returns all sub-accounts in the account.
-     *
-     * @return Subcuenta[]
-     */
-    public function getSubAccounts()
-    {
-        $subcuenta = new Subcuenta();
-        return $subcuenta->all([new DataBaseWhere('idcuenta', $this->idcuenta)]);
-    }
-
-    /**
-     * Returns the first account that meets the indicated condition.
-     *
-     * @param DataBaseWhere[] $where
-     * @param array $orderby
-     *
-     * @return null|Cuenta
-     */
-    public function getAccountWithCondition($where, $orderby = [])
-    {
-        if (empty($orderby)) {
-            $orderby = ['codejercicio' => 'DESC', 'codcuenta' => 'ASC'];
-        }
-        $result = $this->all($where, $orderby, 0, 1);
-        if (empty($result)) {
-            return null;
-        }
-        return $result[0];
-    }
-
-    /**
-     * Gets the first selected special account.
-     *
-     * @param string $idcuentaesp
-     * @param string $codejercicio
-     *
-     * @return null|Cuenta
-     */
-    public function getSpecialAccount($idcuentaesp, $codejercicio)
-    {
-        $where = [
-            new DataBaseWhere('idcuentaesp', $idcuentaesp),
-            new DataBaseWhere('codejercicio', $codejercicio)
-        ];
-        return $this->getAccountWithCondition($where);
-    }
-
-    /**
-     * Check and load the id of the parent account
-     *
-     * @return bool
-     */
-    private function testParentAccount()
-    {
-        $where = [
-            new DataBaseWhere('codejercicio', $this->codejercicio),
-            new DataBaseWhere('parent_codcuenta', $this->parent_codcuenta)
-        ];
-
-        $account = $this->getAccountWithCondition($where);
-        if (isset($account)) {
-            $this->parent_idcuenta = $account->parent_idcuenta;
-            return TRUE;
-        }
-        return FALSE;
+        return 'cuentas';
     }
 
     /**
@@ -187,19 +177,55 @@ class Cuenta extends Base\ModelClass
      */
     public function test()
     {
-        $this->descripcion = Utils::noHtml($this->descripcion);
-
-        if (strlen($this->codcuenta) < 1 || strlen($this->descripcion) < 1) {
-            self::$miniLog->alert(self::$i18n->trans('account-data-missing'));
+        $this->codcuenta = trim($this->codcuenta);
+        $this->descripcion = $this->toolBox()->utils()->noHtml($this->descripcion);
+        if (strlen($this->descripcion) < 1 || strlen($this->descripcion) > 255) {
+            $this->toolBox()->i18nLog()->warning('invalid-column-lenght', ['%column%' => 'descripcion', '%min%' => '1', '%max%' => '255']);
             return false;
         }
 
+        /// uncomplete parent account data?
+        if (empty($this->parent_codcuenta) && !empty($this->parent_idcuenta)) {
+            $this->completeParentData();
+        }
+
+        if (!empty($this->parent_idcuenta) && !self::$disableAditionTest) {
+            $parent = $this->getParent();
+            if ($parent->codejercicio != $this->codejercicio || $parent->idcuenta == $this->idcuenta) {
+                $this->toolBox()->i18nLog()->warning('account-parent-error');
+                return false;
+            }
+        }
+
+        return parent::test();
+    }
+
+    /**
+     *
+     * @param string $type
+     * @param string $list
+     *
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'ListCuenta?activetab=List')
+    {
+        return parent::url($type, $list);
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    private function completeParentData()
+    {
+        $parent = $this->getParent();
+        if ($parent->exists() && $parent->codejercicio == $this->codejercicio && $parent->idcuenta != $this->idcuenta) {
+            $this->parent_codcuenta = $parent->codcuenta;
+            return true;
+        }
+
+        $this->parent_codcuenta = null;
         $this->parent_idcuenta = null;
-        if (!empty($this->parent_codcuenta) && !$this->testParentAccount()) {
-            self::$miniLog->alert(self::$i18n->trans('account-parent-error'));
-            return false;
-        }
-
-        return true;
+        return false;
     }
 }

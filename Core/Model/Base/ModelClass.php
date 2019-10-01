@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,20 +10,16 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model\Base;
 
-use FacturaScripts\Core\Base\Cache;
-use FacturaScripts\Core\Base\DataBase;
-use FacturaScripts\Core\Base\DataBase\DataBaseTools;
-use FacturaScripts\Core\Base\MiniLog;
-use FacturaScripts\Core\Base\Translator;
-use FacturaScripts\Core\Lib\Import\CSVImport;
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Dinamic\Model\CodeModel;
 
 /**
  * The class from which all models inherit, connects to the database,
@@ -31,187 +27,79 @@ use FacturaScripts\Core\Lib\Import\CSVImport;
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
-abstract class ModelClass
+abstract class ModelClass extends ModelCore
 {
-
-    /**
-     * It allows to connect and interact with the cache system.
-     *
-     * @var Cache
-     */
-    protected static $cache;
-
-    /**
-     * List of already tested tables.
-     *
-     * @var array|null
-     */
-    private static $checkedTables;
-
-    /**
-     * It provides direct access to the database.
-     *
-     * @var DataBase
-     */
-    protected static $dataBase;
-
-    /**
-     * Multi-language translator.
-     *
-     * @var Translator
-     */
-    protected static $i18n;
-
-    /**
-     * Manage the log of all controllers, models and database.
-     *
-     * @var MiniLog
-     */
-    protected static $miniLog;
-
-    /**
-     * Check an array of data so that it has the correct structure of the model.
-     *
-     * @param array $data
-     */
-    abstract public function checkArrayData(&$data);
-    
-    /**
-     * Returns the list of fields in the table.
-     *
-     * @return array
-     */
-    abstract protected function getModelFields();
-
-    /**
-     * Assign the values of the $data array to the model properties.
-     *
-     * @param array    $data
-     * @param string[] $exclude
-     */
-    abstract public function loadFromData(array $data = [], array $exclude = []);
-
-    /**
-     * Loads table fields if is necessary.
-     *
-     * @param DataBase  $dataBase
-     * @param string    $tableName
-     */
-    abstract protected function loadModelFields(&$dataBase, $tableName);
-
-    /**
-     * Returns the name of the class of the model.
-     *
-     * @return string
-     */
-    abstract public function modelClassName();
-
-    /**
-     * Returns the name of the model.
-     *
-     * @return string
-     */
-    abstract public function modelName();
-
-    /**
-     * Returns the name of the column that is the model's primary key.
-     *
-     * @return string
-     */
-    abstract public static function primaryColumn();
-
-    /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    abstract public static function tableName();
-
-    /**
-     * ModelClass constructor.
-     *
-     * @param array $data
-     */
-    public function __construct($data = [])
-    {
-        if (self::$cache === null) {
-            self::$cache = new Cache();
-            self::$dataBase = new DataBase();
-            self::$i18n = new Translator();
-            self::$miniLog = new MiniLog();
-
-            self::$checkedTables = self::$cache->get('fs_checked_tables');
-            if (self::$checkedTables === null || self::$checkedTables === false) {
-                self::$checkedTables = [];
-            }
-        }
-
-        if (static::tableName() !== '' && !in_array(static::tableName(), self::$checkedTables, false) && $this->checkTable()) {
-            self::$miniLog->debug(self::$i18n->trans('table-checked', ['%tableName%' => static::tableName()]));
-            self::$checkedTables[] = static::tableName();
-            self::$cache->set('fs_checked_tables', self::$checkedTables);
-        }
-
-        $this->loadModelFields(self::$dataBase, static::tableName());
-        if (empty($data)) {
-            $this->clear();
-        } else {
-            $this->loadFromData($data);
-        }
-    }
 
     /**
      * Returns all models that correspond to the selected filters.
      *
-     * @param DataBase\DataBaseWhere[] $where  filters to apply to model records.
-     * @param array                    $order  fields to use in the sorting. For example ['code' => 'ASC']
-     * @param int                      $offset
-     * @param int                      $limit
+     * @param array $where filters to apply to model records.
+     * @param array $order fields to use in the sorting. For example ['code' => 'ASC']
+     * @param int   $offset
+     * @param int   $limit
      *
-     * @return array
+     * @return static[]
      */
-    public function all(array $where = [], array $order = [], $offset = 0, $limit = 50)
+    public function all(array $where = [], array $order = [], int $offset = 0, int $limit = 50)
     {
         $modelList = [];
-        $sqlWhere = DataBase\DataBaseWhere::getSQLWhere($where);
-        $sql = 'SELECT * FROM ' . static::tableName() . $sqlWhere . $this->getOrderBy($order);
-        $data = self::$dataBase->selectLimit($sql, $limit, $offset);
-        if (!empty($data)) {
-            $class = $this->modelName();
-            foreach ($data as $d) {
-                $modelList[] = new $class($d);
-            }
+        $sql = 'SELECT * FROM ' . static::tableName() . DataBaseWhere::getSQLWhere($where) . $this->getOrderBy($order);
+        foreach (self::$dataBase->selectLimit($sql, $limit, $offset) as $row) {
+            $modelList[] = new static($row);
         }
 
         return $modelList;
     }
 
     /**
-     * Reset the values of all model properties.
+     * Allows to use this model as source in CodeModel special model.
+     * 
+     * @param string $fieldCode
+     * 
+     * @return CodeModel[]
      */
-    public function clear()
+    public function codeModelAll(string $fieldCode = '')
     {
-        foreach ($this->getModelFields() as $field) {
-            $this->{$field['name']} = null;
+        $results = [];
+        $field = empty($fieldCode) ? static::primaryColumn() : $fieldCode;
+
+        $sql = 'SELECT DISTINCT ' . $field . ' AS code, ' . $this->primaryDescriptionColumn() . ' AS description '
+            . 'FROM ' . static::tableName() . ' ORDER BY 2 ASC';
+        foreach (self::$dataBase->selectLimit($sql, CodeModel::ALL_LIMIT) as $d) {
+            $results[] = new CodeModel($d);
         }
+
+        return $results;
+    }
+
+    /**
+     * Allows to use this model as source in CodeModel special model.
+     * 
+     * @param string $query
+     * @param string $fieldCode
+     *
+     * @return CodeModel[]
+     */
+    public function codeModelSearch(string $query, string $fieldCode = '')
+    {
+        $field = empty($fieldCode) ? static::primaryColumn() : $fieldCode;
+        $fields = $field . '|' . $this->primaryDescriptionColumn();
+        $where = [new DataBaseWhere($fields, mb_strtolower($query, 'UTF8'), 'LIKE')];
+        return CodeModel::all(static::tableName(), $field, $this->primaryDescriptionColumn(), false, $where);
     }
 
     /**
      * Returns the number of records in the model that meet the condition.
      *
-     * @param DataBase\DataBaseWhere[] $where filters to apply to model records.
+     * @param DataBaseWhere[] $where filters to apply to model records.
      *
      * @return int
      */
     public function count(array $where = [])
     {
-        $sql = 'SELECT COUNT(1) AS total FROM ' . static::tableName() . DataBase\DataBaseWhere::getSQLWhere($where);
+        $sql = 'SELECT COUNT(1) AS total FROM ' . static::tableName() . DataBaseWhere::getSQLWhere($where);
         $data = self::$dataBase->select($sql);
-        if (empty($data)) {
-            return 0;
-        }
-
-        return $data[0]['total'];
+        return empty($data) ? 0 : (int) $data[0]['total'];
     }
 
     /**
@@ -221,10 +109,22 @@ abstract class ModelClass
      */
     public function delete()
     {
+        if ($this->pipe('deleteBefore') === 'false') {
+            return false;
+        }
+
         $sql = 'DELETE FROM ' . static::tableName() . ' WHERE ' . static::primaryColumn()
             . ' = ' . self::$dataBase->var2str($this->primaryColumnValue()) . ';';
 
-        return self::$dataBase->exec($sql);
+        if (self::$dataBase->exec($sql)) {
+            /// TODO: remove after 2018.13
+            $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':delete', $this);
+
+            $this->pipe('delete');
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -234,45 +134,23 @@ abstract class ModelClass
      */
     public function exists()
     {
-        if ($this->primaryColumnValue() === null) {
-            return false;
-        }
-
         $sql = 'SELECT 1 FROM ' . static::tableName() . ' WHERE ' . static::primaryColumn()
             . ' = ' . self::$dataBase->var2str($this->primaryColumnValue()) . ';';
 
-        return (bool) self::$dataBase->select($sql);
+        return empty($this->primaryColumnValue()) ? false : (bool) self::$dataBase->select($sql);
     }
 
     /**
      * Returns the model whose primary column corresponds to the value $cod
      *
-     * @param string $cod
+     * @param string $code
      *
-     * @return mixed|bool
+     * @return static|false
      */
-    public function get($cod)
+    public function get($code)
     {
-        $data = $this->getRecord($cod);
-        if (!empty($data)) {
-            $class = $this->modelName();
-
-            return new $class($data[0]);
-        }
-
-        return false;
-    }
-
-    /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
-     *
-     * @return string
-     */
-    public function install()
-    {
-        return CSVImport::importTableSQL(static::tableName());
+        $data = $this->getRecord($code);
+        return empty($data) ? false : new static($data[0]);
     }
 
     /**
@@ -283,23 +161,21 @@ abstract class ModelClass
      * meet the above conditions.
      * Returns True if the record exists and False otherwise.
      *
-     * @param string                   $cod
-     * @param DataBase\DataBaseWhere[] $where
-     * @param array                    $orderby
+     * @param string $code
+     * @param array  $where
+     * @param array  $orderby
      *
      * @return bool
      */
-    public function loadFromCode($cod, $where = null, $orderby = [])
+    public function loadFromCode($code, array $where = [], array $orderby = [])
     {
-        $data = $this->getRecord($cod, $where, $orderby);
+        $data = $this->getRecord($code, $where, $orderby);
         if (empty($data)) {
             $this->clear();
-
             return false;
         }
 
         $this->loadFromData($data[0]);
-
         return true;
     }
 
@@ -307,38 +183,32 @@ abstract class ModelClass
      * Returns the following code for the reported field or the primary key of the model.
      *
      * @param string $field
+     * @param array  $where
      *
      * @return int
      */
-    public function newCode($field = '')
+    public function newCode(string $field = '', array $where = [])
     {
-        $sqlWhere = '';
+        /// if not field value take PK Field
         if (empty($field)) {
-            /// Set Cast to Integer of PK Field
-            $field = self::$dataBase->sql2Int($this->primaryColumn());
+            $field = static::primaryColumn();
+        }
 
+        /// get fields list
+        $modelFields = $this->getModelFields();
+
+        /// Set Cast to Integer if field it's not
+        if (!in_array($modelFields[$field]['type'], ['integer', 'int', 'serial'])) {
             /// Set Where to Integers values only
-            $where = [new DataBase\DataBaseWhere($this->primaryColumn(), '^-?[0-9]+$', 'REGEXP')];
-            $sqlWhere = DataBase\DataBaseWhere::getSQLWhere($where);
+            $where[] = new DataBaseWhere($field, '^-?[0-9]+$', 'REGEXP');
+            $field = self::$dataBase->getEngine()->getSQL()->sql2Int($field);
         }
 
+        /// Search for new code value
+        $sqlWhere = DataBaseWhere::getSQLWhere($where);
         $sql = 'SELECT MAX(' . $field . ') as cod FROM ' . static::tableName() . $sqlWhere . ';';
-        $cod = self::$dataBase->select($sql);
-        if (empty($cod)) {
-            return 1;
-        }
-
-        return 1 + (int) $cod[0]['cod'];
-    }
-
-    /**
-     * Returns the current value of the main column of the model.
-     *
-     * @return mixed
-     */
-    public function primaryColumnValue()
-    {
-        return $this->{$this->primaryColumn()};
+        $data = self::$dataBase->select($sql);
+        return empty($data) ? 1 : 1 + (int) $data[0]['cod'];
     }
 
     /**
@@ -348,7 +218,8 @@ abstract class ModelClass
      */
     public function primaryDescriptionColumn()
     {
-        return 'descripcion';
+        $fields = $this->getModelFields();
+        return isset($fields['descripcion']) ? 'descripcion' : static::primaryColumn();
     }
 
     /**
@@ -359,11 +230,7 @@ abstract class ModelClass
     public function primaryDescription()
     {
         $field = $this->primaryDescriptionColumn();
-        if (isset($this->{$field})) {
-            return $this->{$field};
-        }
-
-        return (string) $this->primaryColumnValue();
+        return isset($this->{$field}) ? $this->{$field} : (string) $this->primaryColumnValue();
     }
 
     /**
@@ -373,15 +240,26 @@ abstract class ModelClass
      */
     public function save()
     {
-        if ($this->test()) {
-            if ($this->exists()) {
-                return $this->saveUpdate();
-            }
+        /// TODO: remove after 2018.13
+        $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':save:before', $this);
 
-            return $this->saveInsert();
+        if ($this->pipe('saveBefore') === false) {
+            return false;
         }
 
-        return false;
+        $done = false;
+        if ($this->test()) {
+            $done = $this->exists() ? $this->saveUpdate() : $this->saveInsert();
+        }
+
+        if ($done) {
+            /// TODO: remove after 2018.13
+            $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':save', $this);
+
+            $this->pipe('save');
+        }
+
+        return $done;
     }
 
     /**
@@ -392,7 +270,22 @@ abstract class ModelClass
      */
     public function test()
     {
-        return true;
+        $fields = $this->getModelFields();
+        if (empty($fields)) {
+            return false;
+        }
+
+        $return = true;
+        foreach ($fields as $key => $value) {
+            if ($key == static::primaryColumn()) {
+                $this->{$key} = empty($this->{$key}) ? null : $this->{$key};
+            } elseif (null === $value['default'] && $value['is_nullable'] === 'NO' && $this->{$key} === null) {
+                $this->toolBox()->i18nLog()->warning('field-can-not-be-null', ['%fieldName%' => $key, '%tableName%' => static::tableName()]);
+                $return = false;
+            }
+        }
+
+        return $return;
     }
 
     /**
@@ -403,66 +296,109 @@ abstract class ModelClass
      *
      * @return string
      */
-    public function url($type = 'auto', $list = 'List')
+    public function url(string $type = 'auto', string $list = 'List')
     {
         $value = $this->primaryColumnValue();
         $model = $this->modelClassName();
-        $result = '';
         switch ($type) {
-            case 'list':
-                $result .= $list . $model;
-                break;
-
             case 'edit':
-                $result .= 'Edit' . $model . '?code=' . $value;
-                break;
+                return is_null($value) ? 'Edit' . $model : 'Edit' . $model . '?code=' . rawurlencode($value);
+
+            case 'list':
+                return $list . $model;
 
             case 'new':
-                $result .= 'Edit' . $model;
-                break;
-
-            default:
-                $result .= empty($value) ? $list . $model : 'Edit' . $model . '?code=' . $value;
-                break;
+                return 'Edit' . $model;
         }
 
-        return $result;
+        /// default
+        return empty($value) ? $list . $model : 'Edit' . $model . '?code=' . rawurlencode($value);
     }
 
     /**
-     * Check and update the structure of the table if necessary.
+     * Insert the model data in the database.
+     *
+     * @param array $values
      *
      * @return bool
      */
-    private function checkTable()
+    protected function saveInsert(array $values = [])
     {
-        $dbTools = new DataBaseTools();
-        $sql = '';
-        $xmlCols = [];
-        $xmlCons = [];
+        /// TODO: remove after 2018.13
+        $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':saveInsert:before', $this);
 
-        if (!$dbTools->getXmlTable(static::tableName(), $xmlCols, $xmlCons)) {
-            self::$miniLog->critical(self::$i18n->trans('error-on-xml-file'));
-
+        if ($this->pipe('saveInsertBefore') === false) {
             return false;
         }
 
-        if (self::$dataBase->tableExists(static::tableName())) {
-            $sql .= $dbTools->checkTable(static::tableName(), $xmlCols, $xmlCons);
-        } else {
-            /// we generate the sql to create the table
-            $sql .= $dbTools->generateTable(static::tableName(), $xmlCols, $xmlCons);
-            $sql .= $this->install();
+        $insertFields = [];
+        $insertValues = [];
+        foreach ($this->getModelFields() as $field) {
+            if (isset($this->{$field['name']})) {
+                $fieldName = $field['name'];
+                $fieldValue = isset($values[$fieldName]) ? $values[$fieldName] : $this->{$fieldName};
+
+                $insertFields[] = self::$dataBase->escapeColumn($fieldName);
+                $insertValues[] = self::$dataBase->var2str($fieldValue);
+            }
         }
 
-        if ($sql !== '' && !self::$dataBase->exec($sql)) {
-            self::$miniLog->critical(self::$i18n->trans('check-table', ['%tableName%' => static::tableName()]));
-            self::$cache->clear();
+        $sql = 'INSERT INTO ' . static::tableName() . ' (' . implode(',', $insertFields) . ') VALUES (' . implode(',', $insertValues) . ');';
+        if (self::$dataBase->exec($sql)) {
+            if ($this->primaryColumnValue() === null) {
+                $this->{static::primaryColumn()} = self::$dataBase->lastval();
+            } else {
+                self::$dataBase->updateSequence(static::tableName(), $this->getModelFields());
+            }
 
+            /// TODO: remove after 2018.13
+            $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':saveInsert', $this);
+
+            $this->pipe('saveInsert');
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Update the model data in the database.
+     *
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveUpdate(array $values = [])
+    {
+        /// TODO: remove after 2018.13
+        $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':saveUpdate:before', $this);
+
+        if ($this->pipe('saveUpdateBefore') === false) {
             return false;
         }
 
-        return true;
+        $sql = 'UPDATE ' . static::tableName();
+        $coma = ' SET';
+
+        foreach ($this->getModelFields() as $field) {
+            if ($field['name'] !== static::primaryColumn()) {
+                $fieldName = $field['name'];
+                $fieldValue = isset($values[$fieldName]) ? $values[$fieldName] : $this->{$fieldName};
+                $sql .= $coma . ' ' . self::$dataBase->escapeColumn($fieldName) . ' = ' . self::$dataBase->var2str($fieldValue);
+                $coma = ', ';
+            }
+        }
+
+        $sql .= ' WHERE ' . static::primaryColumn() . ' = ' . self::$dataBase->var2str($this->primaryColumnValue()) . ';';
+        if (self::$dataBase->exec($sql)) {
+            /// TODO: remove after 2018.13
+            $this->toolBox()->events()->trigger('Model:' . $this->modelClassName() . ':saveUpdate', $this);
+
+            $this->pipe('saveUpdate');
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -478,9 +414,7 @@ abstract class ModelClass
         $coma = ' ORDER BY ';
         foreach ($order as $key => $value) {
             $result .= $coma . $key . ' ' . $value;
-            if ($coma === ' ORDER BY ') {
-                $coma = ', ';
-            }
+            $coma = ', ';
         }
 
         return $result;
@@ -488,82 +422,18 @@ abstract class ModelClass
 
     /**
      * Read the record whose primary column corresponds to the value $cod
-     * or the first that meets the indicated condition
+     * or the first that meets the indicated condition.
      *
-     * @param string     $cod
-     * @param array|null $where
-     * @param array      $orderby
+     * @param string $code
+     * @param array  $where
+     * @param array  $orderby
      *
      * @return array
      */
-    private function getRecord($cod, $where = null, $orderby = [])
+    private function getRecord($code, array $where = [], array $orderby = [])
     {
-        $sqlWhere = empty($where) ? ' WHERE ' . static::primaryColumn() . ' = ' . self::$dataBase->var2str($cod) : DataBase\DataBaseWhere::getSQLWhere($where);
-
+        $sqlWhere = empty($where) ? ' WHERE ' . static::primaryColumn() . ' = ' . self::$dataBase->var2str($code) : DataBaseWhere::getSQLWhere($where);
         $sql = 'SELECT * FROM ' . static::tableName() . $sqlWhere . $this->getOrderBy($orderby);
-
         return self::$dataBase->selectLimit($sql, 1);
-    }
-
-    /**
-     * Insert the model data in the database.
-     *
-     * @param array $values
-     *
-     * @return bool
-     */
-    protected function saveInsert($values = [])
-    {
-        $insertFields = [];
-        $insertValues = [];
-        foreach ($this->getModelFields() as $field) {
-            if (isset($this->{$field['name']})) {
-                $fieldName = $field['name'];
-                $fieldValue = isset($values[$fieldName]) ? $values[$fieldName] : $this->{$fieldName};
-
-                $insertFields[] = $fieldName;
-                $insertValues[] = self::$dataBase->var2str($fieldValue);
-            }
-        }
-
-        $sql = 'INSERT INTO ' . static::tableName()
-            . ' (' . implode(',', $insertFields) . ') VALUES (' . implode(',', $insertValues) . ');';
-        if (self::$dataBase->exec($sql)) {
-            if ($this->primaryColumnValue() === null) {
-                $this->{static::primaryColumn()} = self::$dataBase->lastval();
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Update the model data in the database.
-     *
-     * @param array $values
-     *
-     * @return bool
-     */
-    protected function saveUpdate($values = [])
-    {
-        $sql = 'UPDATE ' . static::tableName();
-        $coma = ' SET';
-
-        foreach ($this->getModelFields() as $field) {
-            if ($field['name'] !== $this->primaryColumn()) {
-                $fieldName = $field['name'];
-                $fieldValue = isset($values[$fieldName]) ? $values[$fieldName] : $this->{$fieldName};
-                $sql .= $coma . ' ' . $fieldName . ' = ' . self::$dataBase->var2str($fieldValue);
-                if ($coma === ' SET') {
-                    $coma = ', ';
-                }
-            }
-        }
-
-        $sql .= ' WHERE ' . static::primaryColumn() . ' = ' . self::$dataBase->var2str($this->primaryColumnValue()) . ';';
-
-        return self::$dataBase->exec($sql);
     }
 }

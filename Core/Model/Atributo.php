@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2015-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2015-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * Un atributo para artículos.
@@ -28,6 +25,7 @@ use FacturaScripts\Core\Base\Utils;
  */
 class Atributo extends Base\ModelClass
 {
+
     use Base\ModelTrait;
 
     /**
@@ -45,16 +43,6 @@ class Atributo extends Base\ModelClass
     public $nombre;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
-    {
-        return 'atributos';
-    }
-
-    /**
      * Returns the name of the column that is the model's primary key.
      *
      * @return string
@@ -65,40 +53,13 @@ class Atributo extends Base\ModelClass
     }
 
     /**
-     * Obtain the attributes of an attribute code.
+     * Returns the name of the table that uses this model.
      *
-     * @return AtributoValor[]
+     * @return string
      */
-    public function valores()
+    public static function tableName()
     {
-        $valor0 = new AtributoValor();
-
-        return $valor0->allFromAtributo($this->codatributo);
-    }
-
-    /**
-     * Get attribute by name.
-     *
-     * @param string $nombre
-     * @param bool   $minusculas
-     *
-     * @return Atributo|bool
-     */
-    public function getByNombre($nombre, $minusculas = false)
-    {
-        $sql = 'SELECT * FROM ' . static::tableName() . ' WHERE nombre = ' . self::$dataBase->var2str($nombre) . ';';
-        if ($minusculas) {
-            $sql = 'SELECT * FROM ' . static::tableName()
-                . ' WHERE lower(nombre) = ' . self::$dataBase->var2str(mb_strtolower($nombre, 'UTF8') . ';');
-        }
-
-        $data = self::$dataBase->select($sql);
-
-        if (!empty($data)) {
-            return new self($data[0]);
-        }
-
-        return false;
+        return 'atributos';
     }
 
     /**
@@ -108,8 +69,30 @@ class Atributo extends Base\ModelClass
      */
     public function test()
     {
-        $this->nombre = Utils::noHtml($this->nombre);
-        
-        return true;
+        if (!empty($this->codatributo) && !preg_match('/^[A-Z0-9_\+\.\-]{1,20}$/i', $this->codatributo)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codatributo, '%column%' => 'codatributo', '%min%' => '1', '%max%' => '20']
+            );
+            return false;
+        }
+
+        $this->nombre = $this->toolBox()->utils()->noHtml($this->nombre);
+        return parent::test();
+    }
+
+    /**
+     * 
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codatributo)) {
+            $this->codatributo = (string) $this->newCode();
+        }
+
+        return parent::saveInsert($values);
     }
 }

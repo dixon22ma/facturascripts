@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,30 +10,30 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model\Base;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * This class groups the data and bank calculation methods
  * for a generic use.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 abstract class BankAccount extends ModelClass
 {
 
+    const GROUP_LENGTH = 4;
+
     /**
      * Primary key. Varchar(10).
      *
-     * @var int
+     * @var string
      */
     public $codcuenta;
 
@@ -43,6 +43,12 @@ abstract class BankAccount extends ModelClass
      * @var string
      */
     public $descripcion;
+
+    /**
+     *
+     * @var bool
+     */
+    private $disableIbanTest = false;
 
     /**
      * Bank account international format.
@@ -59,54 +65,80 @@ abstract class BankAccount extends ModelClass
     public $swift;
 
     /**
+     * Returns the IBAN with or without spaces.
+     *
+     * @param bool $spaced
+     *
+     * @return string
+     */
+    public function getIban(bool $spaced = false)
+    {
+        $iban = str_replace(' ', '', $this->iban);
+        $groups = [];
+        for ($num = 0; $num < strlen($iban); $num += self::GROUP_LENGTH) {
+            $groups[] = substr($iban, $num, self::GROUP_LENGTH);
+        }
+
+        return $spaced ? implode(' ', $groups) : $iban;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public static function primaryColumn()
+    {
+        return 'codcuenta';
+    }
+
+    /**
+     * 
+     * @param bool $value
+     */
+    public function setDisableIbanTest($value)
+    {
+        $this->disableIbanTest = $value;
+    }
+
+    /**
      * Returns True if there is no errors on properties values.
      *
      * @return bool
      */
     public function test()
     {
-        parent::test();
-        $this->descripcion = Utils::noHtml($this->descripcion);
-
-        if (!$this->testBankAccount()) {
-            self::$miniLog->alert(self::$i18n->trans('error-incorrect-bank-details'));
-
+        if (!empty($this->codcuenta) && !preg_match('/^[A-Z0-9_\+\.\-]{1,10}$/i', $this->codcuenta)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codcuenta, '%column%' => 'codcuenta', '%min%' => '1', '%max%' => '10']
+            );
             return false;
         }
 
-        return true;
+        $utils = $this->toolBox()->utils();
+        $this->descripcion = $utils->noHtml($this->descripcion);
+        $this->iban = $utils->noHtml($this->iban);
+        $this->swift = $utils->noHtml($this->swift);
+
+        return parent::test() && $this->testBankAccount();
     }
 
     /**
-     * Returns the IBAN with or without spaces.
+     * Check if the DC's of an IBAN are correct.
      *
-     * @param bool $espacios
+     * @param string $iban
      *
-     * @return string
+     * @return bool
      */
-    public function getIban($espacios = false)
+    public function verifyIBAN(string $iban)
     {
-        $iban = str_replace(' ', '', $this->iban);
-        if ($espacios) {
-            $txt = '';
-            for ($i = 0; $i < $len = strlen($iban); $i += 4) {
-                $txt .= substr($iban, $i, 4) . ' ';
-            }
-
-            return $txt;
+        if (strlen($iban) != 24) {
+            return false;
         }
 
-        return $iban;
-    }
-
-    /**
-     * Check the reported bank details.
-     *
-     * @return boolean
-     */
-    protected function testBankAccount()
-    {
-        return (empty($this->iban) || $this->verificarIBAN($this->iban));
+        $codpais = substr($iban, 0, 2);
+        $ccc = substr($iban, -20);
+        return $iban == $this->calculateIBAN($ccc, $codpais);
     }
 
     /**
@@ -117,7 +149,7 @@ abstract class BankAccount extends ModelClass
      *
      * @return string
      */
-    private function calcularIBAN($ccc, $codpais = '')
+    private function calculateIBAN(string $ccc, string $codpais = '')
     {
         $pais = substr($codpais, 0, 2);
         $pesos = ['A' => '10', 'B' => '11', 'C' => '12', 'D' => '13', 'E' => '14', 'F' => '15',
@@ -128,7 +160,6 @@ abstract class BankAccount extends ModelClass
 
         $dividendo = $ccc . $pesos[$pais[0]] . $pesos[$pais[1]] . '00';
         $digitoControl = 98 - \bcmod($dividendo, '97');
-
         if (strlen($digitoControl) === 1) {
             $digitoControl = '0' . $digitoControl;
         }
@@ -137,21 +168,32 @@ abstract class BankAccount extends ModelClass
     }
 
     /**
-     * Check if the DC's of an IBAN are correct.
+     * 
+     * @param array $values
      *
-     * @param string $iban
-     *
-     * @return boolean
+     * @return bool
      */
-    public function verificarIBAN($iban)
+    protected function saveInsert(array $values = [])
     {
-        if (strlen($iban) != 24) {
-            return false;
+        if (empty($this->codcuenta)) {
+            $this->codcuenta = $this->newCode();
         }
 
-        $codpais = substr($iban, 0, 2);
-        $ccc = substr($iban, -20);
+        return parent::saveInsert($values);
+    }
 
-        return $iban == $this->calcularIBAN($ccc, $codpais);
+    /**
+     * Check the reported bank details.
+     *
+     * @return bool
+     */
+    protected function testBankAccount()
+    {
+        if (empty($this->iban) || $this->disableIbanTest || $this->verifyIBAN($this->getIban())) {
+            return true;
+        }
+
+        $this->toolBox()->i18nLog()->error('invalid-iban');
+        return false;
     }
 }

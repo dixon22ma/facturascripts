@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2018-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,28 +10,25 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\Accounting;
 
 use FacturaScripts\Core\Base\DataBase;
-use FacturaScripts\Core\Base\DivisaTools;
-use FacturaScripts\Core\Base\Utils;
+use FacturaScripts\Core\Base\ToolBox;
 
 /**
  * Description of AccountingBase
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author nazca <comercial@nazcanetworks.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author nazca                <comercial@nazcanetworks.com>
  */
 abstract class AccountingBase
 {
-    use Utils;
 
     /**
      * Link with the active dataBase
@@ -39,13 +36,6 @@ abstract class AccountingBase
      * @var DataBase
      */
     protected $dataBase;
-
-    /**
-     * Tools to work with currencies.
-     *
-     * @var DivisaTools
-     */
-    protected $divisaTools;
 
     /**
      * Start date.
@@ -62,21 +52,14 @@ abstract class AccountingBase
     protected $dateTo;
 
     /**
-     * Obtains the balances for each one of the sections of the balance sheet according to their assigned accounts.
-     *
-     * @return array
+     * Generate the balance amounts between two dates.
      */
-    abstract protected function getData();
+    abstract public function generate(string $dateFrom, string $dateTo, array $params = []);
 
     /**
-     * Generate the balance ammounts between two dates.
-     *
-     * @param string $dateFrom
-     * @param string $dateTo
-     *
-     * @return mixed
+     * Obtains the balances for each one of the sections of the balance sheet according to their assigned accounts.
      */
-    abstract public function generate($dateFrom, $dateTo);
+    abstract protected function getData();
 
     /**
      * AccountingBase constructor.
@@ -84,7 +67,6 @@ abstract class AccountingBase
     public function __construct()
     {
         $this->dataBase = new DataBase();
-        $this->divisaTools = new DivisaTools();
     }
 
     /**
@@ -98,5 +80,14 @@ abstract class AccountingBase
     protected function addToDate($date, $add)
     {
         return \date('d-m-Y', strtotime($add, strtotime($date)));
+    }
+
+    /**
+     * 
+     * @return ToolBox
+     */
+    protected function toolBox()
+    {
+        return new ToolBox();
     }
 }

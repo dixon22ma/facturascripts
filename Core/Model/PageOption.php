@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2018 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,29 +10,33 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
-use FacturaScripts\Core\Base\DataBase;
-use FacturaScripts\Core\Lib\ExtendedController;
-
 /**
  * Visual configuration of the FacturaScripts views,
- * each PageOption corresponds to a controller.
+ * each PageOption corresponds to a view or tab.
  *
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
  */
 class PageOption extends Base\ModelClass
 {
 
-    use Base\ModelTrait {
-        loadFromData as traitLoadFromData;
-    }
+    use Base\ModelTrait;
+
+    /**
+     * Definition of the columns. It is called columns but it always
+     * contains GroupItem, which contains the columns.
+     *
+     * @var array
+     */
+    public $columns;
 
     /**
      * Identifier
@@ -40,6 +44,13 @@ class PageOption extends Base\ModelClass
      * @var int
      */
     public $id;
+
+    /**
+     * Definition of modal forms
+     *
+     * @var array
+     */
+    public $modals;
 
     /**
      * Name of the page (controller).
@@ -63,45 +74,14 @@ class PageOption extends Base\ModelClass
     public $rows;
 
     /**
-     * Definition of modal forms
-     *
-     * @var array
+     * Reset values of all model properties.
      */
-    public $modals;
-
-    /**
-     * Definition of the columns. It is called columns but it always
-     * contains GroupItem, which contains the columns.
-     *
-     * @var array
-     */
-    public $columns;
-
-    /**
-     * Defining custom filters
-     *
-     * @var array
-     */
-    public $filters;
-
-    /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
+    public function clear()
     {
-        return 'pages_options';
-    }
-
-    /**
-     * Returns the name of the column that is the model's primary key.
-     *
-     * @return string
-     */
-    public static function primaryColumn()
-    {
-        return 'id';
+        parent::clear();
+        $this->columns = [];
+        $this->modals = [];
+        $this->rows = [];
     }
 
     /**
@@ -116,19 +96,7 @@ class PageOption extends Base\ModelClass
         new Page();
         new User();
 
-        return '';
-    }
-
-    /**
-     * Reset values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->columns = [];
-        $this->modals = [];
-        $this->filters = [];
-        $this->rows = [];
+        return parent::install();
     }
 
     /**
@@ -140,12 +108,31 @@ class PageOption extends Base\ModelClass
     public function loadFromData(array $data = [], array $exclude = [])
     {
         array_push($exclude, 'columns', 'modals', 'filters', 'rows', 'code', 'action');
-        $this->traitLoadFromData($data, $exclude);
+        parent::loadFromData($data, $exclude);
 
-        $columns = json_decode($data['columns'], true);
-        $modals = json_decode($data['modals'], true);
-        $rows = json_decode($data['rows'], true);
-        ExtendedController\VisualItemLoadEngine::loadJSON($columns, $modals, $rows, $this);
+        $this->columns = json_decode($data['columns'], true);
+        $this->modals = json_decode($data['modals'], true);
+        $this->rows = json_decode($data['rows'], true);
+    }
+
+    /**
+     * Returns the name of the column that is the model's primary key.
+     *
+     * @return string
+     */
+    public static function primaryColumn()
+    {
+        return 'id';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'pages_options';
     }
 
     /**
@@ -158,7 +145,6 @@ class PageOption extends Base\ModelClass
         return [
             'columns' => json_encode($this->columns),
             'modals' => json_encode($this->modals),
-            'filters' => json_encode($this->filters),
             'rows' => json_encode($this->rows),
         ];
     }
@@ -170,11 +156,9 @@ class PageOption extends Base\ModelClass
      *
      * @return bool
      */
-    protected function saveInsert($values = [])
+    protected function saveInsert(array $values = [])
     {
-        $values = $this->getEncodeValues();
-
-        return parent::saveInsert($values);
+        return parent::saveInsert($this->getEncodeValues());
     }
 
     /**
@@ -184,54 +168,8 @@ class PageOption extends Base\ModelClass
      *
      * @return bool
      */
-    protected function saveUpdate($values = [])
+    protected function saveUpdate(array $values = [])
     {
-        $values = $this->getEncodeValues();
-
-        return parent::saveUpdate($values);
-    }
-
-    /**
-     * Returns the where filter to locate the view configuration
-     *
-     * @param string $name
-     * @param string $nick
-     *
-     * @return Database\DataBaseWhere[]
-     */
-    private function getPageFilter($name, $nick)
-    {
-        return [
-            new DataBase\DataBaseWhere('nick', $nick),
-            new DataBase\DataBaseWhere('name', $name),
-            new DataBase\DataBaseWhere('nick', 'NULL', 'IS', 'OR'),
-            new DataBase\DataBaseWhere('name', $name),
-        ];
-    }
-
-    /**
-     * Get the settings for the driver and user
-     *
-     * @param string $name
-     * @param string $nick
-     */
-    public function getForUser($name, $nick)
-    {
-        $where = $this->getPageFilter($name, $nick);
-        $orderby = ['nick' => 'ASC'];
-
-        // Load data from database, if not exist install xmlview
-        if (!$this->loadFromCode('', $where, $orderby)) {
-            $this->name = $name;
-
-            if (!ExtendedController\VisualItemLoadEngine::installXML($name, $this)) {
-                self::$miniLog->critical(self::$i18n->trans('error-processing-xmlview', ['%fileName%' => $name]));
-
-                return;
-            }
-        }
-
-        /// Apply values to dynamic Select widgets
-        ExtendedController\VisualItemLoadEngine::applyDynamicSelectValues($this);
+        return parent::saveUpdate($this->getEncodeValues());
     }
 }

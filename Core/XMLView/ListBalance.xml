@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2018 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,17 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
  * Initial description for the controller ListBalance
  *
- * @ author Fco. Antonio Moreno Pérez <famphuelva@gmail.com>
+ * @author Fco. Antonio Moreno Pérez <famphuelva@gmail.com>
+ * @author Artex Trading sa <jcuello@artextrading.com>
 -->
 
 <view>
@@ -33,9 +34,31 @@
         <column name="description" order="120">
             <widget type="text" fieldname="descripcion1" />
         </column>
+        <column name="description2" order="130">
+            <widget type="text" fieldname="descripcion2" />
+        </column>
+        <column name="description3" order="140">
+            <widget type="text" fieldname="descripcion3" />
+        </column>
+        <column name="level1" order="150">
+            <widget type="text" fieldname="nivel1" />
+        </column>
+        <column name="level2" order="160">
+            <widget type="text" fieldname="nivel2" />
+        </column>
+        <column name="level3" order="170">
+            <widget type="text" fieldname="nivel3" />
+        </column>
+        <column name="level4" order="180">
+            <widget type="text" fieldname="nivel4" />
+        </column>
     </columns>
     <rows>
+        <row type="status">
+            <option color="success" fieldname="naturaleza">A</option>
+            <option color="info" fieldname="naturaleza">P</option>
+            <option color="danger" fieldname="naturaleza">PG</option>
+            <option color="warning" fieldname="naturaleza">IG</option>
+        </row>
     </rows>
-    <filters>
-    </filters>
 </view>

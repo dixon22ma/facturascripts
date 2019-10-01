@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,22 +10,26 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Base;
 
-use FacturaScripts\Core\Lib\MenuItem;
-use FacturaScripts\Core\Model;
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Dinamic\Lib\MenuItem;
+use FacturaScripts\Dinamic\Model\Page;
+use FacturaScripts\Dinamic\Model\RoleAccess;
+use FacturaScripts\Dinamic\Model\RoleUser;
+use FacturaScripts\Dinamic\Model\User;
 
 /**
  * Manage the use of the Facturascripts menu.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class MenuManager
 {
@@ -45,16 +49,23 @@ class MenuManager
     private static $menuActive;
 
     /**
+     * Stores active page to use when reload.
+     *
+     * @var Page
+     */
+    private static $menuPageActive;
+
+    /**
      * Controller associated with the page
      *
-     * @var Model\Page
+     * @var Page
      */
     private static $pageModel;
 
     /**
      * User for whom the menu has been created.
      *
-     * @var Model\User|false
+     * @var User|false
      */
     private static $user = false;
 
@@ -74,11 +85,22 @@ class MenuManager
     public function init()
     {
         if (self::$pageModel === null) {
-            self::$pageModel = new Model\Page();
+            self::$pageModel = new Page();
         }
 
         if (self::$user !== false && self::$menu === null) {
             self::$menu = $this->loadUserMenu();
+        }
+    }
+
+    /**
+     * Reloads menu from database.
+     */
+    public function reload()
+    {
+        self::$menu = $this->loadUserMenu();
+        if (null !== self::$menuPageActive) {
+            $this->setActiveMenu(self::$menuPageActive);
         }
     }
 
@@ -97,7 +119,7 @@ class MenuManager
     }
 
     /**
-     * Mark menu and menuitem as selected, and updates the data in the Model\Page
+     * Mark menu and menuitem as selected, and updates the data in the Page
      * model based on the data in the getPageData() of the controller.
      *
      * @param array $pageData
@@ -107,7 +129,7 @@ class MenuManager
         $pageModel = self::$pageModel->get($pageData['name']);
         if ($pageModel === false) {
             $pageData['ordernum'] = 100;
-            $pageModel = new Model\Page($pageData);
+            $pageModel = new Page($pageData);
             $pageModel->save();
         } elseif ($this->pageNeedSave($pageModel, $pageData)) {
             $pageModel->menu = $pageData['menu'];
@@ -128,7 +150,7 @@ class MenuManager
     /**
      * Assign the user to load their menu.
      *
-     * @param Model\User|false $user
+     * @param User|false $user
      */
     public function setUser($user)
     {
@@ -137,26 +159,18 @@ class MenuManager
     }
 
     /**
-     * Reloads menu from database.
-     */
-    public function reload()
-    {
-        self::$menu = $this->loadUserMenu();
-    }
-
-    /**
      * Returns all access data from the user.
      *
      * @param string $nick
      *
-     * @return Model\RoleAccess[]
+     * @return RoleAccess[]
      */
     private function getUserAccess($nick)
     {
         $access = [];
-        $roleUserModel = new Model\RoleUser();
-        $filter = [new DataBase\DataBaseWhere('nick', $nick)];
-        foreach ($roleUserModel->all($filter) as $roleUser) {
+        $roleUserModel = new RoleUser();
+        $filter = [new DataBaseWhere('nick', $nick)];
+        foreach ($roleUserModel->all($filter, [], 0, 0) as $roleUser) {
             foreach ($roleUser->getRoleAccess() as $roleAccess) {
                 $access[] = $roleAccess;
             }
@@ -168,19 +182,19 @@ class MenuManager
     /**
      * Load the list of pages for the user.
      *
-     * @return Model\Page[]
+     * @return Page[]
      */
     private function loadPages()
     {
-        $where = [new DataBase\DataBaseWhere('showonmenu', true)];
+        $where = [new DataBaseWhere('showonmenu', true)];
         $order = [
             'lower(menu)' => 'ASC',
             'lower(submenu)' => 'ASC',
             'ordernum' => 'ASC',
-            'title' => 'ASC',
+            'lower(title)' => 'ASC',
         ];
 
-        $pages = self::$pageModel->all($where, $order);
+        $pages = self::$pageModel->all($where, $order, 0, 0);
         if (self::$user && self::$user->admin) {
             return $pages;
         }
@@ -207,16 +221,15 @@ class MenuManager
     private function loadUserMenu()
     {
         $result = [];
-        $menuValue = '';
+        $menuValue = null;
         $submenuValue = null;
         $menuItem = null;
         $i18n = new Translator();
 
         /// We load the list of pages for the user
         $pages = $this->loadPages();
-        $sortMenu = [];
         foreach ($pages as $page) {
-            if ($page->menu === '') {
+            if (empty($page->menu)) {
                 continue;
             }
 
@@ -226,7 +239,6 @@ class MenuManager
                 $submenuValue = null;
                 $result[$menuValue] = new MenuItem($menuValue, $i18n->trans($menuValue), '#');
                 $menuItem = &$result[$menuValue]->menu;
-                $sortMenu[$menuValue][] = $result[$menuValue]->title;
             }
 
             /// Submenu break control
@@ -241,14 +253,14 @@ class MenuManager
             $menuItem[$page->name] = new MenuItem($page->name, $i18n->trans($page->title), $page->url(), $page->icon);
         }
 
-        return $this->sortMenu($sortMenu, $result);
+        return $this->sortMenu($result);
     }
 
     /**
      * Returns if the page should be saved.
      *
-     * @param Model\Page $pageModel
-     * @param array      $pageData
+     * @param Page  $pageModel
+     * @param array $pageData
      *
      * @return bool
      */
@@ -264,7 +276,7 @@ class MenuManager
     /**
      * Set the active menu.
      *
-     * @param Model\Page $pageModel
+     * @param Page $pageModel
      */
     private function setActiveMenu($pageModel)
     {
@@ -281,13 +293,14 @@ class MenuManager
      * Assign active menu item.
      *
      * @param MenuItem[] $menu
-     * @param Model\Page $pageModel
+     * @param Page       $pageModel
      */
     private function setActiveMenuItem(&$menu, $pageModel)
     {
         foreach ($menu as $key => $menuItem) {
             if ($menuItem->name === $pageModel->name) {
                 $menu[$key]->active = true;
+                self::$menuPageActive = $pageModel;
                 break;
             } elseif (!empty($pageModel->submenu) && !empty($menuItem->menu) && $menuItem->name === $pageModel->submenu) {
                 $menu[$key]->active = true;
@@ -300,23 +313,22 @@ class MenuManager
     /**
      * Sorts menu and submenus by title.
      *
-     * @param array $sortMenu
      * @param array $result
      *
      * @return array
      */
-    private function sortMenu(&$sortMenu, &$result)
+    private function sortMenu(&$result)
     {
-        /// Reorder menu by title
-        array_multisort($sortMenu, SORT_ASC, $result);
+        /// sort this menu
+        uasort($result, function ($menu1, $menu2) {
+            return strcasecmp($menu1->title, $menu2->title);
+        });
 
-        /// Reorder submenu by title
-        foreach ($result as $posM => $menu) {
-            $sortSubMenu = [];
-            foreach ($menu->menu as $submenu) {
-                $sortSubMenu[$submenu->name] = $submenu->title;
+        /// sort submenus
+        foreach ($result as $key => $value) {
+            if (!empty($value->menu)) {
+                $result[$key]->menu = $this->sortMenu($value->menu);
             }
-            array_multisort($sortSubMenu, SORT_ASC, $result[$posM]->menu);
         }
 
         return $result;

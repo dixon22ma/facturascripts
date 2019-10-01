@@ -1,7 +1,7 @@
 <?php
 /**
- * This file is part of presupuestos_y_pedidos
- * Copyright (C) 2014-2018  Carlos Garcia Gomez       <carlos@facturascripts.com>
+ * This file is part of FacturaScripts
+ * Copyright (C) 2014-2019  Carlos Garcia Gomez       <carlos@facturascripts.com>
  * Copyright (C) 2014-2015  Francesc Pineda Segarra   <shawe.ewahs@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -11,13 +11,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
 /**
@@ -27,6 +26,7 @@ namespace FacturaScripts\Core\Model;
  */
 class LineaPedidoProveedor extends Base\BusinessDocumentLine
 {
+
     use Base\ModelTrait;
 
     /**
@@ -37,6 +37,38 @@ class LineaPedidoProveedor extends Base\BusinessDocumentLine
     public $idpedido;
 
     /**
+     * 
+     * @return string
+     */
+    public function documentColumn()
+    {
+        return 'idpedido';
+    }
+
+    /**
+     * 
+     * @return PedidoProveedor
+     */
+    public function getDocument()
+    {
+        $pedido = new PedidoProveedor();
+        $pedido->loadFromCode($this->idpedido);
+        return $pedido;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public function install()
+    {
+        /// needed dependency
+        new PedidoProveedor();
+
+        return parent::install();
+    }
+
+    /**
      * Returns the name of the table that uses this model.
      *
      * @return string
@@ -44,5 +76,21 @@ class LineaPedidoProveedor extends Base\BusinessDocumentLine
     public static function tableName()
     {
         return 'lineaspedidosprov';
+    }
+
+    /**
+     * 
+     * @param string $type
+     * @param string $list
+     *
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'List')
+    {
+        if (null !== $this->idpedido) {
+            return 'EditPedidoProveedor?code=' . $this->idpedido;
+        }
+
+        return parent::url($type, $list);
     }
 }

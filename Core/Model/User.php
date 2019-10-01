@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * Usuario de FacturaScripts.
@@ -30,6 +27,9 @@ class User extends Base\ModelClass
 {
 
     use Base\ModelTrait;
+    use Base\PasswordTrait;
+
+    const DEFAULT_LEVEL = 2;
 
     /**
      * true -> user is admin.
@@ -37,6 +37,18 @@ class User extends Base\ModelClass
      * @var bool
      */
     public $admin;
+
+    /**
+     *
+     * @var string
+     */
+    public $codagente;
+
+    /**
+     *
+     * @var string
+     */
+    public $codalmacen;
 
     /**
      * user's email.
@@ -74,6 +86,13 @@ class User extends Base\ModelClass
     public $langcode;
 
     /**
+     * Last activity date.
+     *
+     * @var string
+     */
+    public $lastactivity;
+
+    /**
      * Last IP used.
      *
      * @var string
@@ -81,11 +100,11 @@ class User extends Base\ModelClass
     public $lastip;
 
     /**
-     * Last activity date.
+     * Indicates the level of security that the user can access.
      *
-     * @var string
+     * @var integer
      */
-    public $lastactivity;
+    public $level;
 
     /**
      * Session key, saved also in cookie. Regenerated when user log in.
@@ -95,20 +114,6 @@ class User extends Base\ModelClass
     public $logkey;
 
     /**
-     * New password.
-     *
-     * @var string
-     */
-    public $newPassword;
-
-    /**
-     * Repeated new password.
-     *
-     * @var string
-     */
-    public $newPassword2;
-
-    /**
      * Primary key. Varchar (50).
      *
      * @var string
@@ -116,37 +121,15 @@ class User extends Base\ModelClass
     public $nick;
 
     /**
-     * Password hashed with password_hash()
-     *
-     * @var string
+     * Reset the values of all model properties.
      */
-    public $password;
-
-    /**
-     * Indicates the level of security that the user can access
-     *
-     * @var integer
-     */
-    public $level;
-
-    /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
+    public function clear()
     {
-        return 'users';
-    }
-
-    /**
-     * Returns the name of the column that is the model's primary key.
-     *
-     * @return string
-     */
-    public static function primaryColumn()
-    {
-        return 'nick';
+        parent::clear();
+        $this->enabled = true;
+        $this->idempresa = $this->toolBox()->appSettings()->get('default', 'idempresa', 1);
+        $this->langcode = \FS_LANG;
+        $this->level = self::DEFAULT_LEVEL;
     }
 
     /**
@@ -162,54 +145,11 @@ class User extends Base\ModelClass
         new Page();
         new Empresa();
 
-        self::$miniLog->info(self::$i18n->trans('created-default-admin-account'));
+        $this->toolBox()->i18nLog()->notice('created-default-admin-account');
 
-        return 'INSERT INTO ' . static::tableName() . ' (nick,password,admin,enabled,idempresa,langcode,homepage,level)'
+        return 'INSERT INTO ' . static::tableName() . ' (nick,password,admin,enabled,idempresa,codalmacen,langcode,homepage,level)'
             . " VALUES ('admin','" . password_hash('admin', PASSWORD_DEFAULT)
-            . "',TRUE,TRUE,'1','" . FS_LANG . "','Wizard','99');";
-    }
-
-    /**
-     * Reset the values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->langcode = FS_LANG;
-        $this->homepage = 'Dashboard';
-        $this->idempresa = AppSettings::get('default', 'idempresa', 1);
-        $this->enabled = true;
-        $this->level = 1;
-    }
-
-    /**
-     * Asigns the new password to the user.
-     *
-     * @param string $value
-     */
-    public function setPassword($value)
-    {
-        $this->password = password_hash($value, PASSWORD_DEFAULT);
-    }
-
-    /**
-     * Verifies password. It also rehash the password if needed.
-     *
-     * @param string $value
-     *
-     * @return bool
-     */
-    public function verifyPassword($value)
-    {
-        if (password_verify($value, $this->password)) {
-            if (password_needs_rehash($this->password, PASSWORD_DEFAULT)) {
-                $this->setPassword($value);
-            }
-
-            return true;
-        }
-
-        return false;
+            . "',TRUE,TRUE,'1','1','" . \FS_LANG . "','Wizard','99');";
     }
 
     /**
@@ -222,11 +162,73 @@ class User extends Base\ModelClass
      */
     public function newLogkey($ipAddress)
     {
+        $this->updateActivity($ipAddress);
+        $this->logkey = $this->toolBox()->utils()->randomString(99);
+        return $this->logkey;
+    }
+
+    /**
+     * Returns the name of the column that is the model's primary key.
+     *
+     * @return string
+     */
+    public static function primaryColumn()
+    {
+        return 'nick';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'users';
+    }
+
+    /**
+     * Returns True if there is no errors on properties values.
+     * It runs inside the save method.
+     *
+     * @return bool
+     */
+    public function test()
+    {
+        if ($this->lastactivity === '') {
+            $this->lastactivity = null;
+        }
+
+        if ($this->level === null) {
+            $this->level = 0;
+        }
+
+        $this->nick = trim($this->nick);
+        if (!preg_match("/^[A-Z0-9_\+\.\-]{3,50}$/i", $this->nick)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->nick, '%column%' => 'nick', '%min%' => '3', '%max%' => '50']
+            );
+            return false;
+        }
+
+        if (!empty($this->email) && !filter_var($this->email, FILTER_VALIDATE_EMAIL)) {
+            $this->toolBox()->i18nLog()->warning('not-valid-email', ['%email%' => $this->email]);
+            return false;
+        }
+
+        return $this->testPassword() && $this->testAgent() && $this->testWarehouse() && parent::test();
+    }
+
+    /**
+     * Updates last ip address and last activity property.
+     * 
+     * @param string $ipAddress
+     */
+    public function updateActivity($ipAddress)
+    {
         $this->lastactivity = date('d-m-Y H:i:s');
         $this->lastip = $ipAddress;
-        $this->logkey = Utils::randomString(99);
-
-        return $this->logkey;
     }
 
     /**
@@ -242,44 +244,82 @@ class User extends Base\ModelClass
     }
 
     /**
-     * Check the null value of the fields
+     * 
+     * @param array $values
+     *
+     * @return bool
      */
-    private function checkEmptyValues()
+    protected function saveInsert(array $values = [])
     {
-        if ($this->lastactivity === '') {
-            $this->lastactivity = null;
+        $result = parent::saveInsert($values);
+        if ($result && !$this->admin) {
+            $this->setNewRole();
         }
 
-        if ($this->level === null) {
-            $this->level = 0;
+        return $result;
+    }
+
+    /**
+     * Assigns the first role to this user.
+     */
+    protected function setNewRole()
+    {
+        $roleModel = new Role();
+        foreach ($roleModel->all() as $role) {
+            $roleUser = new RoleUser();
+            $roleUser->codrole = $role->codrole;
+            $roleUser->nick = $this->nick;
+            $roleUser->save();
+
+            /// set user homepage
+            foreach ($roleUser->getRoleAccess() as $roleAccess) {
+                $this->homepage = $roleAccess->pagename;
+                if ('List' == substr($this->homepage, 0, 4)) {
+                    break;
+                }
+            }
+            $this->save();
+            break;
         }
     }
 
     /**
-     * Returns True if there is no errors on properties values.
-     * It runs inside the save method.
-     *
+     * 
      * @return bool
      */
-    public function test()
+    protected function testAgent(): bool
     {
-        $this->checkEmptyValues();
-        $this->nick = trim($this->nick);
-
-        if (!preg_match("/^[A-Z0-9_\+\.\-]{3,50}$/i", $this->nick)) {
-            self::$miniLog->alert(self::$i18n->trans('invalid-user-nick', ['%nick%' => $this->nick]));
-
-            return false;
+        if (empty($this->codagente)) {
+            $this->codagente = null;
+            return true;
         }
 
-        if (isset($this->newPassword, $this->newPassword2) && $this->newPassword !== '' && $this->newPassword2 !== '') {
-            if ($this->newPassword !== $this->newPassword2) {
-                self::$miniLog->alert(self::$i18n->trans('different-passwords', ['%userNick%' => $this->nick]));
+        $agent = new Agente();
+        if (!$agent->loadFromCode($this->codagente)) {
+            $this->codagente = null;
+        }
 
-                return false;
-            }
+        return true;
+    }
 
-            $this->setPassword($this->newPassword);
+    /**
+     * 
+     * @return bool
+     */
+    protected function testWarehouse(): bool
+    {
+        $appSettings = $this->toolBox()->appSettings();
+
+        if (empty($this->codalmacen)) {
+            $this->codalmacen = $appSettings->get('default', 'codalmacen');
+            $this->idempresa = $appSettings->get('default', 'idempresa');
+            return true;
+        }
+
+        $warehouse = new Almacen();
+        if (!$warehouse->loadFromCode($this->codalmacen) || $warehouse->idempresa != $this->idempresa) {
+            $this->codalmacen = $appSettings->get('default', 'codalmacen');
+            $this->idempresa = $appSettings->get('default', 'idempresa');
         }
 
         return true;

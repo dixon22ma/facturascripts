@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,11 +10,11 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
@@ -29,19 +29,11 @@ class Page extends Base\ModelClass
     use Base\ModelTrait;
 
     /**
-     * Primary key. Varchar (30).
-     * Name of the page (controller).
+     * Icon of the page.
      *
      * @var string
      */
-    public $name;
-
-    /**
-     * Page title.
-     *
-     * @var string
-     */
-    public $title;
+    public $icon;
 
     /**
      * Title of the menu option where it is displayed.
@@ -51,11 +43,19 @@ class Page extends Base\ModelClass
     public $menu;
 
     /**
-     * Title of the menu sub-option where it is displayed (if it uses 2 levels).
+     * Primary key. Varchar (30).
+     * Name of the page (controller).
      *
      * @var string
      */
-    public $submenu;
+    public $name;
+
+    /**
+     * Position where it is placed in the menu.
+     *
+     * @var int
+     */
+    public $ordernum;
 
     /**
      * Indicates if it is displayed in the menu.
@@ -66,37 +66,27 @@ class Page extends Base\ModelClass
     public $showonmenu;
 
     /**
-     * Position where it is placed in the menu.
-     *
-     * @var int
-     */
-    public $ordernum;
-
-    /**
-     * Icon of the page.
+     * Title of the menu sub-option where it is displayed (if it uses 2 levels).
      *
      * @var string
      */
-    public $icon;
+    public $submenu;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Page title.
      *
-     * @return string
+     * @var string
      */
-    public static function tableName()
-    {
-        return 'pages';
-    }
+    public $title;
 
     /**
-     * Returns the name of the column that is the model's primary key.
-     *
-     * @return string
+     * Reset the values of all model properties.
      */
-    public static function primaryColumn()
+    public function clear()
     {
-        return 'name';
+        parent::clear();
+        $this->ordernum = 100;
+        $this->showonmenu = true;
     }
 
     /**
@@ -112,13 +102,23 @@ class Page extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * Returns the name of the column that is the model's primary key.
+     *
+     * @return string
      */
-    public function clear()
+    public static function primaryColumn()
     {
-        parent::clear();
-        $this->showonmenu = true;
-        $this->ordernum = 100;
+        return 'name';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'pages';
     }
 
     /**
@@ -129,8 +129,8 @@ class Page extends Base\ModelClass
      *
      * @return string
      */
-    public function url($type = 'auto', $list = 'List')
+    public function url(string $type = 'auto', string $list = 'List')
     {
-        return $this->name;
+        return (string) $this->name;
     }
 }

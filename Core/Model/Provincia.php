@@ -1,8 +1,8 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017       Francesc Pineda Segarra     <francesc.pineda.segarra@gmail.com>
- * Copyright (C) 2013-2018  Carlos Garcia Gomez         <carlos@facturascripts.com>
+ * Copyright (C) 2017       Francesc Pineda Segarra <francesc.pineda.segarra@gmail.com>
+ * Copyright (C) 2013-2019  Carlos Garcia Gomez     <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -11,20 +11,19 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A province.
  *
- * @author Francesc Pineda Segarra <francesc.pineda.segarra@gmail.com>
+ * @author Francesc Pineda Segarra  <francesc.pineda.segarra@gmail.com>
+ * @author Carlos Garcia Gomez      <carlos@facturascripts.com>
  */
 class Provincia extends Base\ModelClass
 {
@@ -32,25 +31,11 @@ class Provincia extends Base\ModelClass
     use Base\ModelTrait;
 
     /**
-     * Identify the registry.
+     * Code id
      *
      * @var string
      */
-    public $idprovincia;
-
-    /**
-     * Country code associated with the province.
-     *
-     * @var string
-     */
-    public $codpais;
-
-    /**
-     * Name of the province.
-     *
-     * @var string
-     */
-    public $provincia;
+    public $codeid;
 
     /**
      * 'Normalized' code in Spain to identify the provinces.
@@ -62,36 +47,42 @@ class Provincia extends Base\ModelClass
     public $codisoprov;
 
     /**
-     * Postal code associated with the province.
-     *
-     * @url: https://upload.wikimedia.org/wikipedia/commons/5/5c/2_digit_postcode_spain.png
+     * Country code associated with the province.
      *
      * @var string
      */
-    public $codpostal2d;
+    public $codpais;
 
     /**
-     * Latitude associated with the place.
+     * Identify the registry.
      *
-     * @var float
+     * @var string
      */
-    public $latitud;
+    public $idprovincia;
 
     /**
-     * Length associated with the place.
+     * Name of the province.
      *
-     * @var float
+     * @var string
      */
-    public $longitud;
+    public $provincia;
+
+    public function clear()
+    {
+        parent::clear();
+        $this->codpais = $this->toolBox()->appSettings()->get('default', 'codpais');
+    }
 
     /**
-     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'provincias';
+        /// needed dependencies
+        new Pais();
+
+        return parent::install();
     }
 
     /**
@@ -105,15 +96,24 @@ class Provincia extends Base\ModelClass
     }
 
     /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'provincias';
+    }
+
+    /**
      * Returns True if there is no errors on properties values.
      *
      * @return bool
      */
     public function test()
     {
-        $this->provincia = Utils::noHtml($this->provincia);
-
-        return true;
+        $this->provincia = $this->toolBox()->utils()->noHtml($this->provincia);
+        return parent::test();
     }
 
     /**
@@ -124,8 +124,8 @@ class Provincia extends Base\ModelClass
      *
      * @return string
      */
-    public function url($type = 'auto', $list = 'List')
+    public function url(string $type = 'auto', string $list = 'ListPais?activetab=List')
     {
-        return parent::url($type, 'ListPais?active=List');
+        return parent::url($type, $list);
     }
 }

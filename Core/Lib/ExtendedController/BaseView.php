@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,49 +10,122 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\ExtendedController;
 
-use FacturaScripts\Core\Base;
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExportManager;
-use FacturaScripts\Core\Model;
+use FacturaScripts\Core\Base\ToolBox;
+use FacturaScripts\Core\Lib\Widget\VisualItem;
+use FacturaScripts\Core\Model\Base\ModelClass;
+use FacturaScripts\Dinamic\Lib\Widget\ColumnItem;
+use FacturaScripts\Dinamic\Lib\Widget\GroupItem;
+use FacturaScripts\Dinamic\Lib\Widget\VisualItemLoadEngine;
+use FacturaScripts\Dinamic\Model\PageOption;
+use FacturaScripts\Dinamic\Model\User;
 
 /**
  * Base definition for the views used in ExtendedControllers
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 abstract class BaseView
 {
+
     /**
-     * Needed model to for the model method calls.
-     * In the scope of EditController it contains the view data.
      *
-     * @var mixed
+     * @var GroupItem[]
      */
-    protected $model;
+    protected $columns = [];
+
+    /**
+     * Total count of read rows.
+     *
+     * @var int
+     */
+    public $count = 0;
+
+    /**
+     * Cursor with data from the model display
+     *
+     * @var array
+     */
+    public $cursor = [];
+
+    /**
+     *
+     * @var string
+     */
+    public $icon;
+
+    /**
+     *
+     * @var array
+     */
+    protected $modals = [];
+
+    /**
+     * Model to use in this view.
+     *
+     * @var ModelClass
+     */
+    public $model;
+
+    /**
+     *
+     * @var string
+     */
+    private $name;
 
     /**
      * Stores the new code from the save() procedure, to use in loadData().
      *
      * @var string
      */
-    protected $newCode;
+    public $newCode;
 
     /**
-     * Columns and filters configuration
+     * Stores the offset for the cursor
      *
-     * @var Model\PageOption
+     * @var int
+     */
+    public $offset = 0;
+
+    /**
+     *
+     * @var array
+     */
+    public $order = [];
+
+    /**
+     * Columns configuration
+     *
+     * @var PageOption
      */
     protected $pageOption;
+
+    /**
+     *
+     * @var array
+     */
+    protected $rows = [];
+
+    /**
+     *
+     * @var array
+     */
+    public $settings;
+
+    /**
+     *
+     * @var string
+     */
+    public $template;
 
     /**
      * View title
@@ -62,127 +135,69 @@ abstract class BaseView
     public $title;
 
     /**
-     * Total count of read rows
+     * Stores the where parameters for the cursor.
      *
-     * @var int
+     * @var DataBaseWhere[]
      */
-    public $count;
+    public $where = [];
 
     /**
-     * Contains the translator
-     *
-     * @var Base\Translator
-     */
-    public static $i18n;
-
-    /**
-     * Establishes de view/edit state of a column
-     *
-     * @param string $columnName
-     * @param bool   $disabled
-     */
-    abstract public function disableColumn($columnName, $disabled);
-
-    /**
-     * Method to export the view data
-     *
-     * @param ExportManager $exportManager
+     * Method to export the view data.
      */
     abstract public function export(&$exportManager);
 
     /**
-     * Load the data in the model or cursor property, according to the code or
-     * where filter specified.
-     *
-     * @param mixed           $code
-     * @param DataBaseWhere[] $where
-     * @param array           $order
-     * @param int             $offset
-     * @param int             $limit
+     * Loads view data.
      */
-    abstract public function loadData($code = false, $where = [], $order = [], $offset = 0, $limit = FS_ITEM_LIMIT);
+    abstract public function loadData($code = '', $where = [], $order = [], $offset = 0, $limit = \FS_ITEM_LIMIT);
+
+    /**
+     * Process form data.
+     */
+    abstract public function processFormData($request, $case);
 
     /**
      * Construct and initialize the class
      *
+     * @param string $name
      * @param string $title
      * @param string $modelName
+     * @param string $icon
      */
-    public function __construct($title, $modelName)
+    public function __construct($name, $title, $modelName, $icon)
     {
-        static::$i18n = new Base\Translator();
-
-        $this->count = 0;
-        $this->title = static::$i18n->trans($title);
-        $this->model = empty($modelName) ? null : new $modelName();
-        $this->pageOption = new Model\PageOption();
-    }
-
-    /**
-     * Verifies the structure and loads into the model the given data array
-     *
-     * @param array $data
-     */
-    public function loadFromData(&$data)
-    {
-        $fieldKey = $this->model->primaryColumn();
-        $fieldValue = $data[$fieldKey];
-        if ($fieldValue !== $this->model->primaryColumnValue() && $fieldValue !== '') {
-            $this->model->loadFromCode($fieldValue);
+        if (class_exists($modelName)) {
+            $this->model = new $modelName();
+        } else {
+            $this->toolBox()->i18nLog()->critical('model-not-found', ['%model%' => $modelName]);
         }
 
-        $this->model->checkArrayData($data);
-        $this->model->loadFromData($data, ['action', 'active']);
+        $this->icon = $icon;
+        $this->name = $name;
+        $this->pageOption = new PageOption();
+        $this->settings = [
+            'active' => true,
+            'btnDelete' => true,
+            'btnNew' => true,
+            'btnPrint' => false,
+            'btnSave' => true,
+            'btnUndo' => true,
+        ];
+        $this->template = 'Master/BaseView.html.twig';
+        $this->title = $this->toolBox()->i18n()->trans($title);
+        $this->assets();
     }
 
     /**
-     * Saves the model data into the database for persistence
+     * Gets the modal column by the column name
      *
-     * @return bool
-     */
-    public function save()
-    {
-        if ($this->model->save()) {
-            $this->newCode = $this->model->primaryColumnValue();
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Calculate and set new code for PK of the model
-     */
-    public function setNewCode()
-    {
-        $this->model->{$this->model->primaryColumn()} = $this->model->newCode();
-    }
-
-    /**
-     * Deletes from the database the row with the given code
+     * @param string $columnName
      *
-     * @param string $code
-     *
-     * @return bool
+     * @return ColumnItem
      */
-    public function delete($code)
+    public function columnModalForName(string $columnName)
     {
-        if ($this->model->loadFromCode($code)) {
-            return $this->model->delete();
-        }
-
-        return false;
-    }
-
-    /**
-     * Returns the pointer to the data model
-     *
-     * @return mixed
-     */
-    public function getModel()
-    {
-        return $this->model;
+        return $this->getColumnForName($columnName, $this->modals);
     }
 
     /**
@@ -192,22 +207,9 @@ abstract class BaseView
      *
      * @return ColumnItem
      */
-    public function columnForName($columnName)
+    public function columnForName(string $columnName)
     {
-        $result = null;
-        foreach ($this->pageOption->columns as $group) {
-            foreach ($group->columns as $key => $column) {
-                if ($key === $columnName) {
-                    $result = $column;
-                    break;
-                }
-            }
-            if (!empty($result)) {
-                break;
-            }
-        }
-
-        return $result;
+        return $this->getColumnForName($columnName, $this->columns);
     }
 
     /**
@@ -217,22 +219,93 @@ abstract class BaseView
      *
      * @return ColumnItem
      */
-    public function columnForField($fieldName)
+    public function columnForField(string $fieldName)
     {
-        $result = null;
-        foreach ($this->pageOption->columns as $group) {
+        foreach ($this->columns as $group) {
             foreach ($group->columns as $column) {
-                if ($column->widget->fieldName === $fieldName) {
-                    $result = $column;
-                    break;
+                if ($column->widget->fieldname === $fieldName) {
+                    return $column;
                 }
-            }
-            if (!empty($result)) {
-                break;
             }
         }
 
-        return $result;
+        return null;
+    }
+
+    /**
+     * Establishes the column's display or read only state.
+     *
+     * @param string $columnName
+     * @param bool   $disabled
+     * @param string $readOnly
+     */
+    public function disableColumn($columnName, $disabled = true, $readOnly = '')
+    {
+        $column = $this->columnForName($columnName);
+        if (!empty($column)) {
+            $column->display = $disabled ? 'none' : 'left';
+            $column->widget->readonly = empty($readOnly) ? $column->widget->readonly : $readOnly;
+        }
+    }
+
+    /**
+     * Returns the column configuration
+     *
+     * @return GroupItem[]
+     */
+    public function getColumns()
+    {
+        return $this->columns;
+    }
+
+    /**
+     * Returns the modal configuration
+     *
+     * @return GroupItem[]
+     */
+    public function getModals()
+    {
+        return $this->modals;
+    }
+
+    /**
+     *
+     * @return array
+     */
+    public function getPagination()
+    {
+        $pages = [];
+        $key1 = $key2 = 0;
+        $current = 1;
+
+        /// add all pages
+        while ($key2 < $this->count) {
+            $pages[$key1] = [
+                'active' => ($key2 == $this->offset),
+                'num' => $key1 + 1,
+                'offset' => $key1 * \FS_ITEM_LIMIT,
+            ];
+            if ($key2 == $this->offset) {
+                $current = $key1;
+            }
+            $key1++;
+            $key2 += \FS_ITEM_LIMIT;
+        }
+
+        /// now descarting pages
+        foreach (array_keys($pages) as $key2) {
+            $middle = intval($key1 / 2);
+
+            /**
+             * We discard everything except the first page, the last one, the middle one,
+             * the current one, the 5 previous and 5 following ones.
+             */
+            if (($key2 > 1 && $key2 < $current - 5 && $key2 != $middle) || ( $key2 > $current + 5 && $key2 < $key1 - 1 && $key2 != $middle)) {
+                unset($pages[$key2]);
+            }
+        }
+
+        return (count($pages) > 1) ? $pages : [];
     }
 
     /**
@@ -240,43 +313,11 @@ abstract class BaseView
      *
      * @param string $key
      *
-     * @return RowItem
+     * @return mixed
      */
-    public function getRow($key)
+    public function getRow(string $key)
     {
-        return isset($this->pageOption->rows[$key]) ? $this->pageOption->rows[$key] : null;
-    }
-
-    /**
-     * Returns the list of modal forms
-     *
-     * @return array
-     */
-    public function getModals()
-    {
-        return $this->pageOption->modals;
-    }
-
-    /**
-     * Returns the url for the requested model type
-     *
-     * @param string $type (edit / list / auto)
-     *
-     * @return string
-     */
-    public function getURL($type)
-    {
-        return empty($this->model) ? '' : $this->model->url($type);
-    }
-
-    /**
-     * Returns the model identifier
-     *
-     * @return string
-     */
-    public function getModelID()
-    {
-        return empty($this->model) ? '' : $this->model->modelClassName();
+        return isset($this->rows[$key]) ? $this->rows[$key] : null;
     }
 
     /**
@@ -286,6 +327,101 @@ abstract class BaseView
      */
     public function getViewName()
     {
-        return $this->pageOption->name;
+        return $this->name;
+    }
+
+    /**
+     * Verifies the structure and loads into the model the given data array
+     *
+     * @param array $data
+     */
+    public function loadFromData(array &$data)
+    {
+        $fieldKey = $this->model->primaryColumn();
+        $fieldValue = $data[$fieldKey];
+        if ($fieldValue !== $this->model->primaryColumnValue() && $fieldValue !== '') {
+            $this->model->loadFromCode($fieldValue);
+        }
+
+        $this->model->loadFromData($data, ['action', 'activetab']);
+    }
+
+    /**
+     *
+     * @param User|false $user
+     */
+    public function loadPageOptions($user = false)
+    {
+        if (!is_bool($user)) {
+            /// sets user security level for use in render
+            VisualItem::setLevel($user->level);
+        }
+
+        $orderby = ['nick' => 'ASC'];
+        $where = $this->getPageWhere($user);
+        if (!$this->pageOption->loadFromCode('', $where, $orderby)) {
+            $viewName = explode('-', $this->name)[0];
+            VisualItemLoadEngine::installXML($viewName, $this->pageOption);
+        }
+
+        VisualItemLoadEngine::loadArray($this->columns, $this->modals, $this->rows, $this->pageOption);
+    }
+
+    /**
+     * Adds assets to the asset manager.
+     */
+    protected function assets()
+    {
+        ;
+    }
+
+    /**
+     * Gets the column by the column name from source group
+     *
+     * @param string $columnName
+     * @param array  $source
+     *
+     * @return ColumnItem
+     */
+    protected function getColumnForName(string $columnName, &$source)
+    {
+        foreach ($source as $group) {
+            foreach ($group->columns as $key => $column) {
+                if ($key === $columnName) {
+                    return $column;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Returns DataBaseWhere[] for locate a pageOption model.
+     *
+     * @param User|false $user
+     */
+    protected function getPageWhere($user = false)
+    {
+        $viewName = explode('-', $this->name)[0];
+
+        if (is_bool($user)) {
+            return [new DataBaseWhere('name', $viewName)];
+        }
+
+        return [
+            new DataBaseWhere('name', $viewName),
+            new DataBaseWhere('nick', $user->nick),
+            new DataBaseWhere('nick', null, 'IS', 'OR'),
+        ];
+    }
+
+    /**
+     * 
+     * @return ToolBox
+     */
+    protected function toolBox()
+    {
+        return new ToolBox();
     }
 }

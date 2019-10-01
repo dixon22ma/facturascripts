@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A country, for example Spain.
@@ -32,20 +29,20 @@ class Pais extends Base\ModelClass
     use Base\ModelTrait;
 
     /**
-     * Primary key. Varchar(3).
-     *
-     * @var string Alpha-3 code of the country.
-     *             http://es.wikipedia.org/wiki/ISO_3166-1
-     */
-    public $codpais;
-
-    /**
      * Alpha-2 code of the country.
      * http://es.wikipedia.org/wiki/ISO_3166-1
      *
      * @var string
      */
     public $codiso;
+
+    /**
+     * Primary key. Varchar(3). Alpha-3 code of the country.
+     * http://es.wikipedia.org/wiki/ISO_3166-1
+     *
+     * @var string
+     */
+    public $codpais;
 
     /**
      * Country name.
@@ -55,13 +52,28 @@ class Pais extends Base\ModelClass
     public $nombre;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
+     * Removed country from database.
+     * 
+     * @return bool
      */
-    public static function tableName()
+    public function delete()
     {
-        return 'paises';
+        if ($this->isDefault()) {
+            $this->toolBox()->i18nLog()->warning('cant-delete-default-country');
+            return false;
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * Returns True if this the default country.
+     *
+     * @return bool
+     */
+    public function isDefault()
+    {
+        return $this->codpais === $this->toolBox()->appSettings()->get('default', 'codpais');
     }
 
     /**
@@ -85,13 +97,13 @@ class Pais extends Base\ModelClass
     }
 
     /**
-     * Returns True if the country is the default of the company.
+     * Returns the name of the table that uses this model.
      *
-     * @return bool
+     * @return string
      */
-    public function isDefault()
+    public static function tableName()
     {
-        return $this->codpais === AppSettings::get('default', 'codpais');
+        return 'paises';
     }
 
     /**
@@ -102,20 +114,15 @@ class Pais extends Base\ModelClass
     public function test()
     {
         $this->codpais = trim($this->codpais);
-        $this->nombre = Utils::noHtml($this->nombre);
-
         if (!preg_match('/^[A-Z0-9]{1,20}$/i', $this->codpais)) {
-            self::$miniLog->alert(self::$i18n->trans('invalid-country-code', ['%countryCode%' => $this->codpais]));
-
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codpais, '%column%' => 'codpais', '%min%' => '1', '%max%' => '20']
+            );
             return false;
         }
 
-        if (!(strlen($this->nombre) > 1) && !(strlen($this->nombre) < 100)) {
-            self::$miniLog->alert(self::$i18n->trans('country-name-invalid'));
-
-            return false;
-        }
-
-        return true;
+        $this->nombre = $this->toolBox()->utils()->noHtml($this->nombre);
+        return parent::test();
     }
 }

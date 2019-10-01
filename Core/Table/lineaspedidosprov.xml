@@ -7,9 +7,10 @@
 -->
 <table>
     <column>
-        <name>pvptotal</name>
-        <type>double precision</type>
+        <name>actualizastock</name>
+        <type>integer</type>
         <null>NO</null>
+        <default>2</default>
     </column>
     <column>
         <name>cantidad</name>
@@ -17,49 +18,12 @@
         <null>NO</null>
     </column>
     <column>
-        <name>irpf</name>
-        <type>double precision</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>recargo</name>
-        <type>double precision</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>dtolineal</name>
-        <type>double precision</type>
+        <name>codimpuesto</name>
+        <type>character varying(10)</type>
     </column>
     <column>
         <name>descripcion</name>
         <type>text</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>idlinea</name>
-        <type>serial</type>
-        <null>NO</null>
-        <default>nextval('lineaspedidosprov_idlinea_seq'::regclass)</default>
-    </column>
-    <column>
-        <name>idpedido</name>
-        <type>integer</type>
-        <null>NO</null>
-    </column>
-    <column>
-        <name>codimpuesto</name>
-        <type>character varying(10)</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>cerrada</name>
-        <type>boolean</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>iva</name>
-        <type>double precision</type>
-        <null>YES</null>
     </column>
     <column>
         <name>dtopor</name>
@@ -67,7 +31,40 @@
         <null>NO</null>
     </column>
     <column>
+        <name>idlinea</name>
+        <type>serial</type>
+        <null>NO</null>
+    </column>
+    <column>
+        <name>idpedido</name>
+        <type>integer</type>
+        <null>NO</null>
+    </column>
+    <column>
+        <name>idproducto</name>
+        <type>integer</type>
+    </column>
+    <column>
+        <name>irpf</name>
+        <type>double precision</type>
+    </column>
+    <column>
+        <name>iva</name>
+        <type>double precision</type>
+        <null>NO</null>
+    </column>
+    <column>
+        <name>orden</name>
+        <type>integer</type>
+        <default>0</default>
+    </column>
+    <column>
         <name>pvpsindto</name>
+        <type>double precision</type>
+        <null>NO</null>
+    </column>
+    <column>
+        <name>pvptotal</name>
         <type>double precision</type>
         <null>NO</null>
     </column>
@@ -77,26 +74,34 @@
         <null>NO</null>
     </column>
     <column>
+        <name>recargo</name>
+        <type>double precision</type>
+        <null>NO</null>
+    </column>
+    <column>
         <name>referencia</name>
         <type>character varying(30)</type>
-        <null>YES</null>
     </column>
     <column>
-        <name>codcombinacion</name>
-        <type>character varying(18)</type>
-    </column>
-    <column>
-        <name>totalenalbaran</name>
+        <name>servido</name>
         <type>double precision</type>
+        <null>NO</null>
+        <default>0</default>
     </column>
     <constraint>
         <name>lineaspedidosprov_pkey</name>
         <type>PRIMARY KEY (idlinea)</type>
     </constraint>
     <constraint>
+        <name>ca_lineaspedidosprov_impuestos</name>
+        <type>FOREIGN KEY (codimpuesto) REFERENCES impuestos (codimpuesto) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
         <name>ca_lineaspedidosprov_pedidosprov</name>
-        <type>FOREIGN KEY (idpedido)
-            REFERENCES pedidosprov (idpedido)
-            ON DELETE CASCADE ON UPDATE CASCADE</type>
+        <type>FOREIGN KEY (idpedido) REFERENCES pedidosprov (idpedido) ON DELETE CASCADE ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_lineaspedidosprov_productos</name>
+        <type>FOREIGN KEY (idproducto) REFERENCES productos (idproducto) ON DELETE SET NULL ON UPDATE CASCADE</type>
     </constraint>
 </table>

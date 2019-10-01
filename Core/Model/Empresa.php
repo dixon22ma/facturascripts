@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,15 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
-use FacturaScripts\Core\Base\Utils;
-use FacturaScripts\Core\Lib\RegimenIVA;
+use FacturaScripts\Dinamic\Lib\RegimenIVA;
 
 /**
  * This class stores the main data of the company.
@@ -28,6 +27,7 @@ use FacturaScripts\Core\Lib\RegimenIVA;
  */
 class Empresa extends Base\Contact
 {
+
     use Base\ModelTrait;
 
     /**
@@ -80,6 +80,12 @@ class Empresa extends Base\Contact
     public $idempresa;
 
     /**
+     *
+     * @var int
+     */
+    public $idlogo;
+
+    /**
      * Short name of the company, to show on the menu.
      *
      * @var string Name to show in the menu.
@@ -94,14 +100,7 @@ class Empresa extends Base\Contact
     public $provincia;
 
     /**
-     * True -> activates the use of an equivalence surcharge on delivery notes and purchase invoices.
-     *
-     * @var bool
-     */
-    public $recequivalencia;
-
-    /**
-     * VAT regime of the company.
+     * Taxation regime of the provider. For now they are only implemented general and exempt.
      *
      * @var string
      */
@@ -115,13 +114,58 @@ class Empresa extends Base\Contact
     public $web;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Reset the values of all model properties.
+     */
+    public function clear()
+    {
+        parent::clear();
+        $this->codpais = $this->toolBox()->appSettings()->get('default', 'codpais');
+        $this->regimeniva = RegimenIVA::defaultValue();
+    }
+
+    /**
+     * Removes company from database.
+     *
+     * @return bool
+     */
+    public function delete()
+    {
+        if ($this->isDefault()) {
+            $this->toolBox()->i18nLog()->warning('cant-delete-default-company');
+            return false;
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'empresas';
+        /// needed dependencies
+        new AttachedFile();
+
+        $num = mt_rand(1, 9999);
+        return 'INSERT INTO ' . static::tableName() . ' (idempresa,web,codpais,'
+            . 'direccion,administrador,cifnif,nombre,nombrecorto,personafisica,regimeniva)'
+            . "VALUES (1,'https://www.facturascripts.com','ESP','',"
+            . "'','00000014Z','Empresa " . $num . " S.L.','E-" . $num . "','0',"
+            . "'" . RegimenIVA::defaultValue() . "');";
+    }
+
+    /**
+     * Returns True if this is the default company.
+     *
+     * @return bool
+     */
+    public function isDefault()
+    {
+        return $this->idempresa === (int) $this->toolBox()->appSettings()->get('default', 'idempresa');
     }
 
     /**
@@ -145,14 +189,13 @@ class Empresa extends Base\Contact
     }
 
     /**
-     * Reset the values of all model properties.
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
      */
-    public function clear()
+    public static function tableName()
     {
-        parent::clear();
-
-        $regimenIVA = new RegimenIVA();
-        $this->regimeniva = $regimenIVA::defaultValue();
+        return 'empresas';
     }
 
     /**
@@ -162,37 +205,62 @@ class Empresa extends Base\Contact
      */
     public function test()
     {
-        $this->administrador = Utils::noHtml($this->administrador);
-        $this->apartado = Utils::noHtml($this->apartado);
-        $this->ciudad = Utils::noHtml($this->ciudad);
-        $this->codpostal = Utils::noHtml($this->codpostal);
-        $this->direccion = Utils::noHtml($this->direccion);
-        $this->nombrecorto = Utils::noHtml($this->nombrecorto);
-        $this->provincia = Utils::noHtml($this->provincia);
-        $this->web = Utils::noHtml($this->web);
-
-        if (empty($this->idempresa)) {
-            $this->idempresa = $this->newCode();
-        }
+        $utils = $this->toolBox()->utils();
+        $this->administrador = $utils->noHtml($this->administrador);
+        $this->apartado = $utils->noHtml($this->apartado);
+        $this->ciudad = $utils->noHtml($this->ciudad);
+        $this->codpostal = $utils->noHtml($this->codpostal);
+        $this->direccion = $utils->noHtml($this->direccion);
+        $this->nombrecorto = $utils->noHtml($this->nombrecorto);
+        $this->provincia = $utils->noHtml($this->provincia);
+        $this->web = $utils->noHtml($this->web);
 
         return parent::test();
     }
 
-    /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
-     *
-     * @return string
-     */
-    public function install()
+    protected function createPaymentMethods()
     {
-        $num = mt_rand(1, 9999);
+        $formaPago = new FormaPago();
+        $formaPago->codpago = $formaPago->newCode();
+        $formaPago->descripcion = $this->toolBox()->i18n()->trans('default');
+        $formaPago->idempresa = $this->idempresa;
+        $formaPago->save();
+    }
 
-        return 'INSERT INTO ' . static::tableName() . ' (idempresa,recequivalencia,web,email,fax,telefono1,codpais,apartado,'
-            . 'provincia,ciudad,codpostal,direccion,administrador,cifnif,nombre,nombrecorto)'
-            . "VALUES (1,NULL,'https://www.facturascripts.com',"
-            . "NULL,NULL,NULL,'ESP',NULL,NULL,NULL,NULL,'C/ Falsa, 123','','00000014Z',"
-            . "'Empresa " . $num . " S.L.','E-" . $num . "');";
+    protected function createWarehouse()
+    {
+        $almacen = new Almacen();
+        $almacen->apartado = $this->apartado;
+        $almacen->codalmacen = $almacen->newCode();
+        $almacen->ciudad = $this->ciudad;
+        $almacen->codpais = $this->codpais;
+        $almacen->codpostal = $this->codpostal;
+        $almacen->direccion = $this->direccion;
+        $almacen->idempresa = $this->idempresa;
+        $almacen->nombre = $this->nombrecorto;
+        $almacen->provincia = $this->provincia;
+        $almacen->telefono = $this->telefono1;
+        $almacen->save();
+    }
+
+    /**
+     *
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->idempresa)) {
+            $this->idempresa = $this->newCode();
+        }
+
+        if (parent::saveInsert($values)) {
+            $this->createPaymentMethods();
+            $this->createWarehouse();
+            return true;
+        }
+
+        return false;
     }
 }

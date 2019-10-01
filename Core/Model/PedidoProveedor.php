@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of presupuestos_y_pedidos
- * Copyright (C) 2014-2018  Carlos Garcia Gomez       <carlos@facturascripts.com>
- * Copyright (C) 2014-2015  Francesc Pineda Segarra   <shawe.ewahs@gmail.com>
+ * This file is part of FacturaScripts
+ * Copyright (C) 2014-2019  Carlos Garcia Gomez     <carlos@facturascripts.com>
+ * Copyright (C) 2014-2015  Francesc Pineda Segarra <shawe.ewahs@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -11,18 +11,21 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Dinamic\Model\LineaPedidoProveedor as LineaPedido;
 
 /**
  * Supplier order.
+ * 
+ * @author Carlos García Gómez <carlos@facturascripts.com>
  */
 class PedidoProveedor extends Base\PurchaseDocument
 {
@@ -37,20 +40,36 @@ class PedidoProveedor extends Base\PurchaseDocument
     public $idpedido;
 
     /**
-     * Related delivery note ID.
+     * Returns the lines associated with the order.
      *
-     * @var int
+     * @return LineaPedido[]
      */
-    public $idalbaran;
+    public function getLines()
+    {
+        $lineaModel = new LineaPedido();
+        $where = [new DataBaseWhere('idpedido', $this->idpedido)];
+        $order = ['orden' => 'DESC', 'idlinea' => 'ASC'];
+
+        return $lineaModel->all($where, $order, 0, 0);
+    }
 
     /**
-     * Returns the name of the table that uses this model.
+     * Returns a new line for this document.
+     * 
+     * @param array $data
      *
-     * @return string
+     * @return LineaPedido
      */
-    public static function tableName()
+    public function getNewLine(array $data = [])
     {
-        return 'pedidosprov';
+        $newLine = new LineaPedido();
+        $newLine->idpedido = $this->idpedido;
+        $newLine->irpf = $this->irpf;
+        $newLine->actualizastock = $this->getStatus()->actualizastock;
+
+        $exclude = ['actualizastock', 'idlinea', 'idpedido'];
+        $newLine->loadFromData($data, $exclude);
+        return $newLine;
     }
 
     /**
@@ -64,15 +83,12 @@ class PedidoProveedor extends Base\PurchaseDocument
     }
 
     /**
-     * Returns the lines associated with the order.
+     * Returns the name of the table that uses this model.
      *
-     * @return LineaPedidoProveedor[]
+     * @return string
      */
-    public function getLineas()
+    public static function tableName()
     {
-        $lineaModel = new LineaPedidoProveedor();
-        $where = [new DataBaseWhere('idpedido', $this->idpedido)];
-
-        return $lineaModel->all($where, [], 0, 0);
+        return 'pedidosprov';
     }
 }

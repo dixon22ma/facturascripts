@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,15 +10,16 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Dinamic\Model\LineaAlbaranCliente as LineaAlbaran;
 
 /**
  * Customer's delivery note or delivery note. Represents delivery to a customer
@@ -40,20 +41,36 @@ class AlbaranCliente extends Base\SalesDocument
     public $idalbaran;
 
     /**
-     * ID of the related invoice, if any.
+     * Returns the lines associated with the delivery note.
      *
-     * @var int
+     * @return LineaAlbaran[]
      */
-    public $idfactura;
+    public function getLines()
+    {
+        $lineaModel = new LineaAlbaran();
+        $where = [new DataBaseWhere('idalbaran', $this->idalbaran)];
+        $order = ['orden' => 'DESC', 'idlinea' => 'ASC'];
+
+        return $lineaModel->all($where, $order, 0, 0);
+    }
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
+     * Returns a new line for the document.
+     * 
+     * @param array $data
+     * 
+     * @return LineaAlbaran
      */
-    public static function tableName()
+    public function getNewLine(array $data = [])
     {
-        return 'albaranescli';
+        $newLine = new LineaAlbaran();
+        $newLine->idalbaran = $this->idalbaran;
+        $newLine->irpf = $this->irpf;
+        $newLine->actualizastock = $this->getStatus()->actualizastock;
+
+        $exclude = ['actualizastock', 'idlinea', 'idalbaran'];
+        $newLine->loadFromData($data, $exclude);
+        return $newLine;
     }
 
     /**
@@ -67,32 +84,12 @@ class AlbaranCliente extends Base\SalesDocument
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function install()
+    public static function tableName()
     {
-        parent::install();
-
-        new FacturaCliente();
-
-        return '';
-    }
-
-    /**
-     * Returns the lines associated with the delivery note.
-     *
-     * @return LineaAlbaranCliente[]
-     */
-    public function getLineas()
-    {
-        $lineaModel = new LineaAlbaranCliente();
-        $where = [new DataBaseWhere('idalbaran', $this->idalbaran)];
-        $order = ['orden' => 'DESC', 'idlinea' => 'ASC'];
-
-        return $lineaModel->all($where, $order, 0, 0);
+        return 'albaranescli';
     }
 }

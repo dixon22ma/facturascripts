@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,45 +10,26 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Dinamic\Lib\ExtendedController\ListBusinessDocument;
 
 /**
  * Controller to list the items in the FacturaCliente model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez          <carlos@facturascripts.com>
+ * @author Artex Trading sa             <jcuello@artextrading.com>
+ * @author Raul Jimenez                 <raul.jimenez@nazcanetworks.com>
+ * @author Cristo M. Estévez Hernández  <cristom.estevez@gmail.com>
  */
-class ListFacturaCliente extends ExtendedController\ListController
+class ListFacturaCliente extends ListBusinessDocument
 {
-    /**
-     * Load views
-     */
-    protected function createViews()
-    {
-        $this->addView('\FacturaScripts\Dinamic\Model\FacturaCliente', 'ListFacturaCliente');
-        $this->addSearchFields('ListFacturaCliente', ['codigo', 'numero2', 'observaciones']);
-
-        $this->addFilterDatePicker('ListFacturaCliente', 'date', 'date', 'fecha');
-        $this->addFilterNumber('ListFacturaCliente', 'total', 'total');
-        $this->addFilterSelect('ListFacturaCliente', 'codalmacen', 'almacenes', '', 'nombre');
-        $this->addFilterSelect('ListFacturaCliente', 'codserie', 'series', '', 'codserie');
-        $this->addFilterSelect('ListFacturaCliente', 'codpago', 'formaspago', '', 'codpago');
-        $this->addFilterAutocomplete('ListFacturaCliente', 'codcliente', 'clientes', '', 'nombre');
-        $this->addFilterCheckbox('ListFacturaCliente', 'paid', 'paid', 'pagada');
-
-        $this->addOrderBy('ListFacturaCliente', 'codigo', 'code');
-        $this->addOrderBy('ListFacturaCliente', 'fecha', 'date', 2);
-        $this->addOrderBy('ListFacturaCliente', 'total', 'amount');
-    }
 
     /**
      * Returns basic page attributes
@@ -57,11 +38,63 @@ class ListFacturaCliente extends ExtendedController\ListController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'invoices';
-        $pagedata['icon'] = 'fa-files-o';
-        $pagedata['menu'] = 'sales';
+        $data = parent::getPageData();
+        $data['menu'] = 'sales';
+        $data['title'] = 'invoices';
+        $data['icon'] = 'fas fa-copy';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        $this->createViewSales('ListFacturaCliente', 'FacturaCliente', 'invoices');
+        $this->addFilterCheckbox('ListFacturaCliente', 'pagada', 'unpaid', '', '!=');
+
+        $this->createViewLines('ListLineaFacturaCliente', 'LineaFacturaCliente');
+        $this->createViewReceipts();
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createViewReceipts($viewName = 'ListReciboCliente')
+    {
+        $this->addView($viewName, 'ReciboCliente', 'receipts', 'fas fa-dollar-sign');
+        $this->addOrderBy($viewName, ['fecha', 'idrecibo'], 'date', 2);
+        $this->addOrderBy($viewName, ['fechapago'], 'payment-date');
+        $this->addOrderBy($viewName, ['vencimiento'], 'expiration');
+        $this->addOrderBy($viewName, ['importe'], 'amount');
+        $this->addSearchFields($viewName, ['observaciones']);
+
+        /// buttons
+        $newButton = [
+            'action' => 'paid',
+            'confirm' => 'true',
+            'icon' => 'fas fa-check',
+            'label' => 'paid',
+            'type' => 'action',
+        ];
+        $this->addButton($viewName, $newButton);
+
+        /// filters
+        $this->addFilterPeriod($viewName, 'date', 'period', 'fecha');
+        $this->addFilterAutocomplete($viewName, 'codcliente', 'customer', 'codcliente', 'Cliente');
+        $this->addFilterNumber($viewName, 'min-total', 'amount', 'importe', '>=');
+        $this->addFilterNumber($viewName, 'max-total', 'amount', 'importe', '<=');
+
+        $currencies = $this->codeModel->all('divisas', 'coddivisa', 'descripcion');
+        $this->addFilterSelect($viewName, 'coddivisa', 'currency', 'coddivisa', $currencies);
+
+        $paymentValues = $this->codeModel->all('formaspago', 'codpago', 'descripcion');
+        $this->addFilterSelect($viewName, 'codpago', 'payment-method', 'codpago', $paymentValues);
+
+        $this->addFilterCheckbox($viewName, 'pagado', 'unpaid', '', '!=');
+
+        /// settings
+        $this->setSettings($viewName, 'btnNew', false);
     }
 }

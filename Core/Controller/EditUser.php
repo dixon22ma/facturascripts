@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,42 +10,38 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExtendedController;
-use FacturaScripts\Core\Model;
+use FacturaScripts\Core\Lib\ExtendedController\BaseView;
+use FacturaScripts\Core\Lib\ExtendedController\EditController;
+use FacturaScripts\Dinamic\Model\Page;
+use FacturaScripts\Dinamic\Model\RoleUser;
+use FacturaScripts\Dinamic\Model\User;
+use Symfony\Component\HttpFoundation\Cookie;
 
 /**
  * Controller to edit a single item from the User model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
-class EditUser extends ExtendedController\PanelController
+class EditUser extends EditController
 {
+
     /**
-     * Load views
+     * 
+     * @return string
      */
-    protected function createViews()
+    public function getModelClassName()
     {
-        /// Add all views
-        $this->addEditView('\FacturaScripts\Dinamic\Model\User', 'EditUser', 'user', 'fa-user');
-        $this->addEditListView('\FacturaScripts\Dinamic\Model\RoleUser', 'EditRoleUser', 'roles', 'fa-address-card-o');
-
-        /// Load values for input selects
-        $this->loadHomepageValues();
-        $this->loadLanguageValues();
-
-        /// Disable column
-        $this->views['EditRoleUser']->disableColumn('user', true);
+        return 'User';
     }
 
     /**
@@ -55,69 +51,98 @@ class EditUser extends ExtendedController\PanelController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'user';
-        $pagedata['icon'] = 'fa-user';
-        $pagedata['menu'] = 'admin';
-        $pagedata['showonmenu'] = false;
-
-        return $pagedata;
+        $data = parent::getPageData();
+        $data['menu'] = 'admin';
+        $data['title'] = 'user';
+        $data['icon'] = 'fas fa-user-circle';
+        return $data;
     }
 
     /**
-     * Load view data proedure
+     * 
+     * @return boolean
+     */
+    private function allowUpdate()
+    {
+        if ($this->user->admin) {
+            return true;
+        }
+
+        return $this->user->nick === $this->request->get('code', '');
+    }
+
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        parent::createViews();
+        $this->setTabsPosition('top');
+
+        if ($this->user->admin) {
+            $this->addEditListView('EditRoleUser', 'RoleUser', 'roles', 'fas fa-address-card');
+
+            /// Disable column
+            $this->views['EditRoleUser']->disableColumn('user', true);
+        }
+    }
+
+    /**
+     * Action to delete data.
      *
-     * @param string                      $keyView
-     * @param ExtendedController\EditView $view
+     * @return bool
      */
-    protected function loadData($keyView, $view)
+    protected function deleteAction()
     {
-        switch ($keyView) {
-            case 'EditUser':
-                $code = $this->request->get('code');
-                $view->loadData($code);
-                break;
-
-            case 'EditRoleUser':
-                $nick = $this->getViewModelValue('EditUser', 'nick');
-                $where = [new DataBaseWhere('nick', $nick)];
-                $view->loadData(false, $where);
-                break;
-        }
+        $this->permissions->allowDelete = $this->user->admin;
+        return parent::deleteAction();
     }
 
     /**
-     * Load a list of pages where user has access that can be setted as homepage.
+     * Runs the data edit action.
+     *
+     * @return bool
      */
-    private function loadHomepageValues()
+    protected function editAction()
     {
-        $user = new Model\User();
-        $code = $this->request->get('code');
+        $this->permissions->allowUpdate = $this->allowUpdate();
+        $result = parent::editAction();
 
-        $userPages = [
-            ['value' => '---null---', 'title' => '------'],
-        ];
-        if ($user->loadFromCode($code)) {
-            $userPages = $this->getUserPages($user);
+        // Are we changing user language?
+        if ($result && $this->views['EditUser']->model->nick === $this->user->nick) {
+            $this->toolBox()->i18n()->setLang($this->views['EditUser']->model->langcode);
+
+            $expire = time() + \FS_COOKIES_EXPIRE;
+            $this->response->headers->setCookie(new Cookie('fsLang', $this->views['EditUser']->model->langcode, $expire));
         }
 
-        $columnHomepage = $this->views['EditUser']->columnForName('homepage');
-        $columnHomepage->widget->setValuesFromArray($userPages);
+        return $result;
+    }
+
+    /**
+     * Runs data insert action.
+     * 
+     * @return bool
+     */
+    protected function insertAction()
+    {
+        $this->permissions->allowUpdate = $this->user->admin;
+        return parent::insertAction();
     }
 
     /**
      * Return a list of pages where user has access.
      *
-     * @param Model\User $user
+     * @param User $user
      *
      * @return array
      */
-    private function getUserPages($user)
+    protected function getUserPages($user)
     {
         $pageList = [];
         if ($user->admin) {
-            $pageModel = new Model\Page();
-            foreach ($pageModel->all([], ['name' => 'ASC'], 0, 500) as $page) {
+            $pageModel = new Page();
+            foreach ($pageModel->all([], ['name' => 'ASC'], 0, 0) as $page) {
                 if (!$page->showonmenu) {
                     continue;
                 }
@@ -128,7 +153,7 @@ class EditUser extends ExtendedController\PanelController
             return $pageList;
         }
 
-        $roleUserModel = new Model\RoleUser();
+        $roleUserModel = new RoleUser();
         foreach ($roleUserModel->all([new DataBaseWhere('nick', $user->nick)]) as $roleUser) {
             foreach ($roleUser->getRoleAccess() as $roleAccess) {
                 $pageList[] = ['value' => $roleAccess->pagename, 'title' => $roleAccess->pagename];
@@ -139,21 +164,67 @@ class EditUser extends ExtendedController\PanelController
     }
 
     /**
-     * Load the available language values from translator.
+     * Load view data proedure
+     *
+     * @param string   $viewName
+     * @param BaseView $view
      */
-    private function loadLanguageValues()
+    protected function loadData($viewName, $view)
     {
-        $columnLangCode = $this->views['EditUser']->columnForName('lang-code');
-        $langs = [];
-        foreach ($this->i18n->getAvailableLanguages() as $key => $value) {
-            $langs[] = ['value' => $key, 'title' => $value];
+        switch ($viewName) {
+            case 'EditRoleUser':
+                $nick = $this->getViewModelValue('EditUser', 'nick');
+                $where = [new DataBaseWhere('nick', $nick)];
+                $view->loadData('', $where, ['id' => 'DESC']);
+                break;
+
+            case 'EditUser':
+                parent::loadData($viewName, $view);
+                $this->loadHomepageValues();
+                $this->loadLanguageValues();
+                if (!$this->allowUpdate()) {
+                    $this->setTemplate('Error/AccessDenied');
+                }
+                break;
+
+            default:
+                parent::loadData($viewName, $view);
+        }
+    }
+
+    /**
+     * Load a list of pages where user has access that can be setted as homepage.
+     */
+    protected function loadHomepageValues()
+    {
+        if (!$this->views['EditUser']->model->exists()) {
+            $this->views['EditUser']->disableColumn('homepage');
+            return;
         }
 
-        /// sorting
-        usort($langs, function ($objA, $objB) {
-            return strcmp($objA['title'], $objB['title']);
-        });
+        $columnHomepage = $this->views['EditUser']->columnForName('homepage');
+        $userPages = $this->getUserPages($this->views['EditUser']->model);
+        $columnHomepage->widget->setValuesFromArray($userPages);
+    }
 
-        $columnLangCode->widget->setValuesFromArray($langs);
+    /**
+     * Load the available language values from translator.
+     */
+    protected function loadLanguageValues()
+    {
+        $columnLangCode = $this->views['EditUser']->columnForName('language');
+        if ($columnLangCode) {
+            $langs = [];
+            foreach ($this->toolBox()->i18n()->getAvailableLanguages() as $key => $value) {
+                $langs[] = ['value' => $key, 'title' => $value];
+            }
+
+            /// sorting
+            usort($langs, function ($objA, $objB) {
+                return strcmp($objA['title'], $objB['title']);
+            });
+
+            $columnLangCode->widget->setValuesFromArray($langs, false);
+        }
     }
 }

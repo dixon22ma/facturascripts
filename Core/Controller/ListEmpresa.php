@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,25 +10,25 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\ListController;
 
 /**
  * Controller to list the items in the Empresa model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
-class ListEmpresa extends ExtendedController\ListController
+class ListEmpresa extends ListController
 {
+
     /**
      * Returns basic page attributes
      *
@@ -36,12 +36,11 @@ class ListEmpresa extends ExtendedController\ListController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'companies';
-        $pagedata['icon'] = 'fa fa-building-o';
-        $pagedata['menu'] = 'admin';
-
-        return $pagedata;
+        $data = parent::getPageData();
+        $data['menu'] = 'admin';
+        $data['title'] = 'companies';
+        $data['icon'] = 'fas fa-building';
+        return $data;
     }
 
     /**
@@ -49,11 +48,9 @@ class ListEmpresa extends ExtendedController\ListController
      */
     protected function createViews()
     {
-        $className = $this->getClassName();
-        $this->addView('\FacturaScripts\Dinamic\Model\Empresa', $className);
-        $this->addSearchFields($className, ['nombre', 'nombrecorto', 'CAST(idempresa AS VARCHAR)']);
-
-        $this->addOrderBy($className, 'idempresa', 'code');
-        $this->addOrderBy($className, 'nombre', 'name');
+        $this->addView('ListEmpresa', 'Empresa', 'companies', 'fas fa-building');
+        $this->addSearchFields('ListEmpresa', ['nombre', 'nombrecorto']);
+        $this->addOrderBy('ListEmpresa', ['idempresa'], 'code');
+        $this->addOrderBy('ListEmpresa', ['nombre'], 'name');
     }
 }

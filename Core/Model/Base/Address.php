@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018    Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2018 Carlos Garcia Gomez  <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,18 +10,16 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model\Base;
 
-use FacturaScripts\Core\Base\Utils;
-
 /**
- * Description of Address
+ * Description of Address abstract class.
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
@@ -71,17 +69,27 @@ abstract class Address extends ModelClass
     public $provincia;
 
     /**
+     * Reset the values of all model properties.
+     */
+    public function clear()
+    {
+        parent::clear();
+        $this->codpais = $this->toolBox()->appSettings()->get('default', 'codpais');
+    }
+
+    /**
      * Returns True if there is no errors on properties values.
      *
      * @return bool
      */
     public function test()
     {
-        $this->apartado = Utils::noHtml($this->apartado);
-        $this->ciudad = Utils::noHtml($this->ciudad);
-        $this->direccion = Utils::noHtml($this->direccion);
-        $this->provincia = Utils::noHtml($this->provincia);
+        $utils = $this->toolBox()->utils();
+        $this->apartado = $utils->noHtml($this->apartado);
+        $this->ciudad = $utils->noHtml($this->ciudad);
+        $this->direccion = $utils->noHtml($this->direccion);
+        $this->provincia = $utils->noHtml($this->provincia);
 
-        return true;
+        return parent::test();
     }
 }

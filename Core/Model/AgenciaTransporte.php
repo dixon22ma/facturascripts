@@ -1,8 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2015         Pablo Peralta
- * Copyright (C) 2015-2018    Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2015-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -11,24 +10,31 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
 /**
  * Merchandise transport agency.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class AgenciaTransporte extends Base\ModelClass
 {
 
     use Base\ModelTrait;
+
+    /**
+     * Contains True if is enabled.
+     *
+     * @var bool
+     */
+    public $activo;
 
     /**
      * Primary key. Varchar(8).
@@ -45,20 +51,24 @@ class AgenciaTransporte extends Base\ModelClass
     public $nombre;
 
     /**
-     * Contains True if is enabled.
      *
-     * @var bool
+     * @var string
      */
-    public $activo;
+    public $telefono;
 
     /**
-     * Returns the name of the table that uses this model.
      *
-     * @return string
+     * @var string
      */
-    public static function tableName()
+    public $web;
+
+    /**
+     * Reset the values of all model properties.
+     */
+    public function clear()
     {
-        return 'agenciastrans';
+        parent::clear();
+        $this->activo = true;
     }
 
     /**
@@ -72,11 +82,48 @@ class AgenciaTransporte extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
      */
-    public function clear()
+    public static function tableName()
     {
-        parent::clear();
-        $this->activo = true;
+        return 'agenciastrans';
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    public function test()
+    {
+        if (!empty($this->codtrans) && !preg_match('/^[A-Z0-9_\+\.\-]{1,8}$/i', $this->codtrans)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codtrans, '%column%' => 'codtrans', '%min%' => '1', '%max%' => '8']
+            );
+            return false;
+        }
+
+        $utils = $this->toolBox()->utils();
+        $this->nombre = $utils->noHtml($this->nombre);
+        $this->telefono = $utils->noHtml($this->telefono);
+        $this->web = $utils->noHtml($this->web);
+        return parent::test();
+    }
+
+    /**
+     * 
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codtrans)) {
+            $this->codtrans = (string) $this->newCode();
+        }
+
+        return parent::saveInsert($values);
     }
 }

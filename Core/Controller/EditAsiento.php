@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,60 +10,38 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
+use Exception;
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\EditController;
+use FacturaScripts\Dinamic\Lib\AccountingEntryTools;
+use FacturaScripts\Dinamic\Model\Asiento;
+use FacturaScripts\Dinamic\Model\Partida;
 
 /**
  * Controller to edit a single item from the Asiento model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
- * @author Fco Antonio Moreno Pérez <famphuelva@gmail.com>
- * @author PC REDNET S.L. <luismi@pcrednet.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
-class EditAsiento extends ExtendedController\PanelController
+class EditAsiento extends EditController
 {
-    /**
-     * Load views
-     */
-    protected function createViews()
-    {
-        $this->addEditView('\FacturaScripts\Dinamic\Model\Asiento', 'EditAsiento', 'accounting-entry', 'fa-balance-scale');
-        $this->addListView('\FacturaScripts\Dinamic\Model\Partida', 'ListPartida', 'accounting-items', 'fa-book');
-        $this->setTabsPosition('bottom');
-    }
 
     /**
-     * Load data view procedure
-     *
-     * @param string                      $keyView
-     * @param ExtendedController\EditView $view
+     * Returns the class name of the model to use in the editView.
+     * 
+     * @return string
      */
-    protected function loadData($keyView, $view)
+    public function getModelClassName()
     {
-        switch ($keyView) {
-            case 'EditAsiento':
-                $code = $this->request->get('code');
-                $view->loadData($code);
-                break;
-
-            case 'ListPartida':
-                $idasiento = $this->getViewModelValue('EditAsiento', 'idasiento');
-                if (!empty($idasiento)) {
-                    $where = [new DataBaseWhere('idasiento', $idasiento)];
-                    $view->loadData(false, $where);
-                }
-                break;
-        }
+        return 'Asiento';
     }
 
     /**
@@ -71,14 +49,184 @@ class EditAsiento extends ExtendedController\PanelController
      *
      * @return array
      */
-    public function getPageData()
+    public function getPageData(): array
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'accounting-entry';
-        $pagedata['menu'] = 'accounting';
-        $pagedata['icon'] = 'fa-balance-scale';
-        $pagedata['showonmenu'] = false;
+        $data = parent::getPageData();
+        $data['menu'] = 'accounting';
+        $data['title'] = 'accounting-entries';
+        $data['icon'] = 'fas fa-balance-scale';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * Overwrite autocomplete function to macro concepts in accounting concept.
+     */
+    protected function autocompleteAction(): array
+    {
+        if ($this->request->get('source', '') === 'conceptos_partidas') {
+            return $this->replaceConcept(parent::autocompleteAction());
+        }
+
+        return parent::autocompleteAction();
+    }
+
+    /**
+     * Clone source document
+     * 
+     * @return bool
+     * @throws Exception
+     */
+    protected function cloneDocument()
+    {
+        $sourceCode = $this->request->get('code');
+
+        // prepare source document structure
+        $accounting = new Asiento();
+        if (!$accounting->loadFromCode($sourceCode)) {
+            return true;  // continue default view load
+        }
+
+        $entryModel = new Partida();
+        $entries = $entryModel->all([new DataBaseWhere('idasiento', $accounting->idasiento)]);
+
+        // init target document data
+        $accounting->idasiento = null;
+        $accounting->fecha = date('d-m-Y');
+        $accounting->numero = $accounting->newCode('numero');
+
+        // start transaction
+        $this->dataBase->beginTransaction();
+
+        // main save process
+        $cloneOk = true;
+        try {
+            if (!$accounting->save()) {
+                throw new Exception($this->toolBox()->i18n()->trans('clone-document-error'));
+            }
+
+            foreach ($entries as $line) {
+                $line->idpartida = null;
+                $line->idasiento = $accounting->idasiento;
+                if (!$line->save()) {
+                    throw new Exception($this->toolBox()->i18n()->trans('clone-line-document-error'));
+                }
+            }
+
+            $this->dataBase->commit();
+        } catch (Exception $exp) {
+            $this->toolBox()->log()->error($exp->getMessage());
+            $cloneOk = false;
+        } finally {
+            if ($this->dataBase->inTransaction()) {
+                $this->dataBase->rollback();
+            }
+        }
+
+        // if all ok then redirect to new record
+        if ($cloneOk) {
+            $this->setTemplate(false);
+            $this->redirect($accounting->url('type') . '&action=save-ok');
+            return false;
+        }
+
+        return true;  // refresh view
+    }
+
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        $master = ['name' => 'EditAsiento', 'model' => 'Asiento'];
+        $detail = ['name' => 'EditPartida', 'model' => 'Partida'];
+        $this->addGridView($master, $detail, 'accounting-entry', 'fas fa-balance-scale');
+        $this->views['EditAsiento']->template = 'EditAsiento.html.twig';
+        $this->setTabsPosition('bottom');
+    }
+
+    /**
+     * Run the actions that alter data before reading it
+     *
+     * @param string $action
+     *
+     * @return bool
+     */
+    protected function execPreviousAction($action)
+    {
+        switch ($action) {
+            case 'account-data':
+                $this->getAccountData();
+                return false;
+
+            case 'clone':
+                return $this->cloneDocument();
+
+            case 'lock':
+                return true; // TODO: Block/Unblock edit data of accounting entry
+
+            case 'recalculate-document':
+                $this->recalculateDocument();
+                return false;
+
+            case 'save-ok':
+                return true;
+
+            default:
+                return parent::execPreviousAction($action);
+        }
+    }
+
+    /**
+     * Replace concept in concepts array with macro values
+     *
+     * @param array array
+     *
+     * @return array
+     */
+    protected function replaceConcept($results): array
+    {
+        $finalResults = [];
+        $idasiento = $this->request->get('code');
+        $accounting = new Asiento();
+        $where = [new DataBaseWhere('idasiento', $idasiento),];
+
+        if ($accounting->loadFromCode('', $where)) {
+            $search = ['%document%', '%date%', '%date-entry%', '%month%'];
+            $replace = [$accounting->documento, date('d-m-Y'), $accounting->fecha, $this->toolBox()->i18n()->trans(date('F', strtotime($accounting->fecha)))];
+            foreach ($results as $result) {
+                $finalValue = array('key' => str_replace($search, $replace, $result['key']), 'value' => $result['value']);
+                $finalResults[] = $finalValue;
+            }
+        }
+
+        return $finalResults;
+    }
+
+    /**
+     * Get account data from request data
+     */
+    private function getAccountData()
+    {
+        $this->setTemplate(false);
+        $subaccount = $this->request->get('codsubcuenta', '');
+        $exercise = $this->request->get('codejercicio', '');
+
+        $tools = new AccountingEntryTools();
+        $data = $tools->getAccountData($exercise, $subaccount);
+        $this->response->setContent(json_encode($data));
+    }
+
+    /**
+     * Recalculate document amounts
+     */
+    private function recalculateDocument()
+    {
+        $this->setTemplate(false);
+        $data = $this->request->request->all();
+
+        $tools = new AccountingEntryTools();
+        $this->response->setContent(
+            json_encode($tools->recalculate($this->views['EditAsiento'], $data))
+        );
     }
 }

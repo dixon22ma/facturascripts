@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,260 +10,124 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\ExtendedController;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExportManager;
+use FacturaScripts\Core\Lib\ListFilter\BaseFilter;
+use FacturaScripts\Dinamic\Lib\AssetManager;
+use FacturaScripts\Dinamic\Lib\ExportManager;
+use FacturaScripts\Dinamic\Lib\Widget\ColumnItem;
+use FacturaScripts\Dinamic\Model\PageFilter;
+use FacturaScripts\Dinamic\Model\User;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * View definition for its use in ListController
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class ListView extends BaseView
 {
-    /**
-     * Order constants
-     */
-    const ICON_ASC = 'fa-sort-amount-asc';
-    const ICON_DESC = 'fa-sort-amount-desc';
 
-    /**
-     * Cursor with data from the model display
-     *
-     * @var array
-     */
-    private $cursor;
+    const DEFAULT_TEMPLATE = 'Master/ListView.html.twig';
+    const MINI_TEMPLATE = 'Master/ListViewMin.html.twig';
 
     /**
      * Filter configuration preset by the user
      *
-     * @var ListFilter[]
+     * @var BaseFilter[]
      */
-    private $filters;
+    public $filters = [];
+
+    /**
+     *
+     * @var string
+     */
+    public $orderKey = '';
+
+    /**
+     * List of fields available to order by.
+     *
+     * @var array
+     */
+    public $orderOptions = [];
+
+    /**
+     * Predefined filter values selected
+     *
+     * @var int
+     */
+    public $pageFilterKey = 0;
+
+    /**
+     * List of predefined filter values
+     *
+     * @var PageFilter[]
+     */
+    public $pageFilters = [];
+
+    /**
+     *
+     * @var string
+     */
+    public $query = '';
 
     /**
      * List of fields where to search in when a search is made
      *
      * @var array
      */
-    private $searchIn;
+    public $searchFields = [];
 
     /**
-     * List of fields available to order by
-     * Example: orderby[key] = ["label" => "Etiqueta", "icon" => ICON_ASC]
-     *          key = field_asc | field_desc
      *
-     * @var array
+     * @var bool
      */
-    private $orderby;
-
-    /**
-     * Selected element in the Order By list
-     *
-     * @var string
-     */
-    public $selectedOrderBy;
-
-    /**
-     * Stores the offset for the cursor
-     *
-     * @var int
-     */
-    private $offset;
-
-    /**
-     * Stores the order for the cursor
-     *
-     * @var array
-     */
-    private $order;
-
-    /**
-     * Stores the where parameters for the cursor
-     *
-     * @var DataBaseWhere[]
-     */
-    private $where;
+    public $showFilters = false;
 
     /**
      * ListView constructor and initialization.
      *
+     * @param string $name
      * @param string $title
      * @param string $modelName
-     * @param string $viewName
-     * @param string $userNick
+     * @param string $icon
      */
-    public function __construct($title, $modelName, $viewName, $userNick)
+    public function __construct($name, $title, $modelName, $icon)
     {
-        parent::__construct($title, $modelName);
-
-        $this->cursor = [];
-        $this->orderby = [];
-        $this->filters = [];
-        $this->searchIn = [];
-        $this->count = 0;
-        $this->selectedOrderBy = '';
-
-        // Carga configuración de la vista para el usuario
-        $this->pageOption->getForUser($viewName, $userNick);
-    }
-
-    /**
-     * Returns the link text for a given model
-     *
-     * @param $data
-     *
-     * @return string
-     */
-    public function getClickEvent($data)
-    {
-        foreach ($this->getColumns() as $col) {
-            if ($col->widget->onClick !== null && $col->widget->onClick !== '') {
-                return $col->widget->onClick . '?code=' . $data->{$col->widget->fieldName};
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * Returns the read data list in Model format
-     *
-     * @return array
-     */
-    public function getCursor()
-    {
-        return $this->cursor;
-    }
-
-    /**
-     * Returns the list of defined filters
-     *
-     * @return ListFilter[]
-     */
-    public function getFilters()
-    {
-        return $this->filters;
-    }
-
-    /**
-     * Returns the field list for the search, in WhereDatabase format
-     *
-     * @return string
-     */
-    public function getSearchIn()
-    {
-        return implode('|', $this->searchIn);
-    }
-
-    /**
-     * Returns the list of defined Order By
-     *
-     * @return array
-     */
-    public function getOrderBy()
-    {
-        return $this->orderby;
-    }
-
-    /**
-     * List of columns and its configuration
-     * (Array of ColumnItem)
-     *
-     * @return ColumnItem[]
-     */
-    public function getColumns()
-    {
-        $keys = array_keys($this->pageOption->columns);
-        if (empty($keys)) {
-            return [];
-        }
-
-        $key = $keys[0];
-
-        return $this->pageOption->columns[$key]->columns;
-    }
-
-    /**
-     * Returns the indicated Order By in array format
-     *
-     * @param string $orderKey
-     *
-     * @return array
-     */
-    public function getSQLOrderBy($orderKey = '')
-    {
-        if (empty($this->orderby)) {
-            return [];
-        }
-
-        if ($orderKey === '') {
-            $orderKey = array_keys($this->orderby)[0];
-        }
-
-        $orderby = explode('_', $orderKey);
-
-        return [$orderby[0] => $orderby[1]];
-    }
-
-    /**
-     * Checks and establishes the selected value in the Order By
-     *
-     * @param string $orderKey
-     */
-    public function setSelectedOrderBy($orderKey)
-    {
-        $keys = array_keys($this->orderby);
-        if (empty($orderKey) || !in_array($orderKey, $keys, false)) {
-            if (empty($this->selectedOrderBy)) {
-                $this->selectedOrderBy = (string) $keys[0]; // We force the first element when there is no default
-            }
-        } else {
-            $this->selectedOrderBy = $orderKey;
-        }
-    }
-
-    /**
-     * Adds the given fields to the list of fields to search in
-     *
-     * @param array $fields
-     */
-    public function addSearchIn($fields)
-    {
-        if (is_array($fields)) {
-            // TODO: Error: Perhaps array_merge/array_replace can be used instead.
-            // Feel free to disable the inspection if '+' is intended.
-            //$this->searchIn = array_merge($this->searchIn, $fields);
-            $this->searchIn += $fields;
-        }
+        parent::__construct($name, $title, $modelName, $icon);
+        $this->template = self::DEFAULT_TEMPLATE;
     }
 
     /**
      * Adds a field to the Order By list
      *
-     * @param string $field
+     * @param array  $fields
      * @param string $label
      * @param int    $default (0 = None, 1 = ASC, 2 = DESC)
      */
-    public function addOrderBy($field, $label = '', $default = 0)
+    public function addOrderBy(array $fields, $label, $default = 0)
     {
-        $key1 = strtolower($field) . '_asc';
-        $key2 = strtolower($field) . '_desc';
-        if (empty($label)) {
-            $label = $field;
-        }
+        $key1 = strtolower(implode('|', $fields)) . '_asc';
+        $this->orderOptions[$key1] = [
+            'fields' => $fields,
+            'label' => $this->toolBox()->i18n()->trans($label),
+            'type' => 'ASC',
+        ];
 
-        $this->orderby[$key1] = ['icon' => self::ICON_ASC, 'label' => static::$i18n->trans($label)];
-        $this->orderby[$key2] = ['icon' => self::ICON_DESC, 'label' => static::$i18n->trans($label)];
+        $key2 = strtolower(implode('|', $fields)) . '_desc';
+        $this->orderOptions[$key2] = [
+            'fields' => $fields,
+            'label' => $this->toolBox()->i18n()->trans($label),
+            'type' => 'DESC',
+        ];
 
         switch ($default) {
             case 1:
@@ -275,69 +139,51 @@ class ListView extends BaseView
                 break;
 
             default:
-                break;
+                if (empty($this->order)) {
+                    $this->setSelectedOrderBy($key1);
+                }
         }
     }
 
     /**
-     * Defines a new option to filter the data with
      *
-     * @param string     $key
-     * @param ListFilter $filter
+     * @return string
      */
-    public function addFilter($key, $filter)
+    public function btnNewUrl()
     {
-        if (empty($filter->options['field'])) {
-            $filter->options['field'] = $key;
+        $url = empty($this->model) ? '' : $this->model->url('new');
+        $params = [];
+        foreach (DataBaseWhere::getFieldsFilter($this->where) as $key => $value) {
+            if ($value !== false) {
+                $params[] = $key . '=' . $value;
+            }
         }
 
-        if (isset($filter->options['label'])) {
-            $filter->options['label'] = static::$i18n->trans($filter->options['label']);
-        }
-
-        $this->filters[$key] = $filter;
+        return empty($params) ? $url : $url . '?' . implode('&', $params);
     }
 
     /**
-     * Establishes a column's display state
+     * Removes a saved user filter.
      *
-     * @param string $columnName
-     * @param bool   $disabled
-     */
-    public function disableColumn($columnName, $disabled)
-    {
-        $column = $this->columnForName($columnName);
-        if (!empty($column)) {
-            $column->display = $disabled ? 'none' : 'left';
-        }
-    }
-
-    /**
-     * Load the data in the cursor property, according to the where filter specified.
+     * @param string $idfilter
      *
-     * @param mixed           $code
-     * @param DataBaseWhere[] $where
-     * @param array           $order
-     * @param int             $offset
-     * @param int             $limit
+     * @return boolean
      */
-    public function loadData($code = false, $where = [], $order = [], $offset = 0, $limit = FS_ITEM_LIMIT)
+    public function deletePageFilter($idfilter)
     {
-        $this->order = empty($order) ? $this->getSQLOrderBy($this->selectedOrderBy) : $order;
-        $this->count = $this->model->count($where);
-        /// needed when megasearch force data reload
-        $this->cursor = [];
-        if ($this->count > 0) {
-            $this->cursor = $this->model->all($where, $this->order, $offset, $limit);
+        $pageFilter = new PageFilter();
+        if ($pageFilter->loadFromCode($idfilter) && $pageFilter->delete()) {
+            /// remove form the list
+            unset($this->pageFilters[$idfilter]);
+
+            return true;
         }
 
-        /// store values where & offset for exportation
-        $this->offset = $offset;
-        $this->where = $where;
+        return false;
     }
 
     /**
-     * Method to export the view data
+     * Method to export the view data.
      *
      * @param ExportManager $exportManager
      */
@@ -348,5 +194,201 @@ class ListView extends BaseView
                 $this->model, $this->where, $this->order, $this->offset, $this->getColumns(), $this->title
             );
         }
+    }
+
+    /**
+     *
+     * @return ColumnItem[]
+     */
+    public function getColumns()
+    {
+        foreach ($this->columns as $group) {
+            return $group->columns;
+        }
+
+        return [];
+    }
+
+    /**
+     * Loads the data in the cursor property, according to the where filter specified.
+     *
+     * @param string          $code
+     * @param DataBaseWhere[] $where
+     * @param array           $order
+     * @param int             $offset
+     * @param int             $limit
+     */
+    public function loadData($code = '', $where = [], $order = [], $offset = -1, $limit = \FS_ITEM_LIMIT)
+    {
+        $this->offset = $offset < 0 ? $this->offset : $offset;
+        $this->order = empty($order) ? $this->order : $order;
+        $this->where = array_merge($where, $this->where);
+        $this->count = is_null($this->model) ? 0 : $this->model->count($this->where);
+
+        /// avoid overflow
+        if ($this->offset > $this->count) {
+            $this->offset = 0;
+        }
+
+        /// needed when megasearch force data reload
+        $this->cursor = [];
+        if ($this->count > 0) {
+            $this->cursor = $this->model->all($this->where, $this->order, $this->offset, $limit);
+        }
+    }
+
+    /**
+     *
+     * @param User|false $user
+     */
+    public function loadPageOptions($user = false)
+    {
+        parent::loadPageOptions($user);
+
+        // load saved filters
+        $orderby = ['nick' => 'ASC', 'description' => 'ASC'];
+        $where = $this->getPageWhere($user);
+        $pageFilter = new PageFilter();
+        foreach ($pageFilter->all($where, $orderby) as $filter) {
+            $this->pageFilters[$filter->id] = $filter;
+        }
+    }
+
+    /**
+     * Process form data needed.
+     *
+     * @param Request $request
+     * @param string  $case
+     */
+    public function processFormData($request, $case)
+    {
+        switch ($case) {
+            case 'edit':
+                $name = $this->settings['modalInsert'] ?? '';
+                if (empty($name)) {
+                    break;
+                }
+                $modals = $this->getModals();
+                foreach ($modals[$name]->columns as $group) {
+                    $group->processFormData($this->model, $request);
+                }
+                break;
+
+            case 'load':
+                $this->processFormDataLoad($request);
+                break;
+
+            case 'preload':
+                foreach ($this->filters as $filter) {
+                    $filter->getDataBaseWhere($this->where);
+                }
+                break;
+        }
+    }
+
+    /**
+     * 
+     * @param Request $request
+     */
+    private function processFormDataLoad($request)
+    {
+        $this->offset = (int) $request->request->get('offset', 0);
+        $this->setSelectedOrderBy($request->request->get('order', ''));
+
+        /// query
+        $this->query = $request->request->get('query', '');
+        if ('' !== $this->query) {
+            $fields = implode('|', $this->searchFields);
+            $this->where[] = new DataBaseWhere($fields, $this->toolBox()->utils()->noHtml($this->query), 'XLIKE');
+        }
+
+        /// select saved filter
+        $this->pageFilterKey = $request->request->get('loadfilter', 0);
+        if (!empty($this->pageFilterKey)) {
+            // Load saved filter into page parameters
+            foreach ($this->pageFilters as $item) {
+                if ($item->id == $this->pageFilterKey) {
+                    $request->request->add($item->filters);
+                    break;
+                }
+            }
+        }
+
+        /// filters
+        foreach ($this->filters as $filter) {
+            $filter->setValueFromRequest($request);
+            if ($filter->getDataBaseWhere($this->where)) {
+                $this->showFilters = true;
+            }
+        }
+    }
+
+    /**
+     * Save filter values for user/s.
+     *
+     * @param Request $request
+     * @param User    $user
+     *
+     * @return int
+     */
+    public function savePageFilter($request, $user)
+    {
+        $pageFilter = new PageFilter();
+
+        // Set values data filter
+        foreach ($this->filters as $filter) {
+            $name = $filter->name();
+            $value = $request->request->get($name, null);
+            if (!empty($value)) {
+                $pageFilter->filters[$name] = $value;
+            }
+        }
+
+        // If filters values its empty, don't save filter
+        if (empty($pageFilter->filters)) {
+            return 0;
+        }
+
+        // Set basic data and save filter
+        $pageFilter->id = $request->request->get('filter-id', null);
+        $pageFilter->description = $request->request->get('filter-description', '');
+        $pageFilter->name = explode('-', $this->getViewName())[0];
+        $pageFilter->nick = $user->nick;
+
+        // Save and return it's all ok
+        if ($pageFilter->save()) {
+            $this->pageFilters[] = $pageFilter;
+            return $pageFilter->id;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Adds assets to the asset manager.
+     */
+    protected function assets()
+    {
+        AssetManager::add('js', \FS_ROUTE . '/Dinamic/Assets/JS/ListView.js');
+    }
+
+    /**
+     * Checks and establishes the selected value in the Order By
+     *
+     * @param string $orderKey
+     */
+    protected function setSelectedOrderBy($orderKey)
+    {
+        if (!isset($this->orderOptions[$orderKey])) {
+            return;
+        }
+
+        $this->order = [];
+        $option = $this->orderOptions[$orderKey];
+        foreach ($option['fields'] as $field) {
+            $this->order[$field] = $option['type'];
+        }
+
+        $this->orderKey = $orderKey;
     }
 }

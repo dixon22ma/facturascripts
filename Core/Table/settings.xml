@@ -15,19 +15,8 @@
         <null>NO</null>
     </column>
     <column>
-        <name>icon</name>
-        <type>character varying(20)</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>description</name>
-        <type>text</type>
-        <null>YES</null>
-    </column>
-    <column>
         <name>properties</name>
         <type>text</type>
-        <null>YES</null>
     </column>
     <constraint>
         <name>settings_pkey</name>

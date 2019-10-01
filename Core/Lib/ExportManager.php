@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,16 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Core\Lib\Export\ExportInterface;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -29,32 +29,40 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ExportManager
 {
+
     /**
      * The selected engine/class to export.
      *
-     * @var mixed
+     * @var ExportInterface
      */
-    private static $engine;
+    protected static $engine;
 
     /**
      * Option list.
      *
      * @var array
      */
-    private static $options;
+    protected static $options;
 
     /**
      * ExportManager constructor.
      */
     public function __construct()
     {
-        if (self::$options === null) {
-            self::$options = [
-                'PDF' => ['description' => 'print', 'icon' => 'fa-print'],
-                'XLS' => ['description' => 'spreadsheet-xls', 'icon' => 'fa-file-excel-o'],
-                'CSV' => ['description' => 'structured-data-csv', 'icon' => 'fa-file-archive-o'],
-            ];
-        }
+        static::init();
+    }
+
+    /**
+     * Adds a new option.
+     *
+     * @param string $key
+     * @param string $description
+     * @param string $icon
+     */
+    public static function addOption($key, $description, $icon)
+    {
+        static::init();
+        static::$options[$key] = ['description' => $description, 'icon' => $icon];
     }
 
     /**
@@ -64,54 +72,21 @@ class ExportManager
      */
     public function defaultOption()
     {
-        $keys = array_keys(self::$options);
+        foreach (array_keys(static::$options) as $key) {
+            return $key;
+        }
 
-        return $keys[0];
+        return '';
     }
 
     /**
-     * returns options to export.
+     * Adds a new page with the document data.
      *
-     * @return array
+     * @param mixed $model
      */
-    public function options()
+    public function generateBusinessDocPage($model)
     {
-        return self::$options;
-    }
-
-    /**
-     * Create a new doc and set headers.
-     *
-     * @param string   $option
-     */
-    public function newDoc($option)
-    {
-        /// llamar a la clase apropiada para generar el archivo en función de la opción elegida
-        $className = $this->getExportClassName($option);
-        self::$engine = new $className();
-        self::$engine->newDoc();
-    }
-
-    /**
-     * Returns the formated data.
-     *
-     * @param Response $response
-     */
-    public function show(&$response)
-    {
-        self::$engine->show($response);
-    }
-
-    /**
-     * Adds a new page with the model data.
-     *
-     * @param mixed  $model
-     * @param array  $columns
-     * @param string $title
-     */
-    public function generateModelPage($model, $columns, $title = '')
-    {
-        self::$engine->generateModelPage($model, $columns, $title);
+        static::$engine->generateBusinessDocPage($model);
     }
 
     /**
@@ -126,20 +101,19 @@ class ExportManager
      */
     public function generateListModelPage($model, $where, $order, $offset, $columns, $title = '')
     {
-        /// disable 30 seconds PHP limit
-        set_time_limit(0);
-
-        self::$engine->generateListModelPage($model, $where, $order, $offset, $columns, $title);
+        static::$engine->generateListModelPage($model, $where, $order, $offset, $columns, $title);
     }
 
     /**
-     * Adds a new page with the document data.
+     * Adds a new page with the model data.
      *
-     * @param mixed $model
+     * @param mixed  $model
+     * @param array  $columns
+     * @param string $title
      */
-    public function generateDocumentPage($model)
+    public function generateModelPage($model, $columns, $title = '')
     {
-        self::$engine->generateDocumentPage($model);
+        static::$engine->generateModelPage($model, $columns, $title);
     }
 
     /**
@@ -156,7 +130,50 @@ class ExportManager
             $fixedHeaders[$value] = $value;
         }
 
-        self::$engine->generateTablePage($fixedHeaders, $rows);
+        static::$engine->generateTablePage($fixedHeaders, $rows);
+    }
+
+    /**
+     * Create a new doc and set headers.
+     *
+     * @param string $option
+     */
+    public function newDoc($option)
+    {
+        /// calls to the appropiate engine to generate the doc
+        $className = $this->getExportClassName($option);
+        static::$engine = new $className();
+        static::$engine->newDoc();
+    }
+
+    /**
+     * returns options to export.
+     *
+     * @return array
+     */
+    public function options()
+    {
+        return static::$options;
+    }
+
+    /**
+     * Sets default orientation.
+     * 
+     * @param string $orientation
+     */
+    public function setOrientation(string $orientation)
+    {
+        static::$engine->setOrientation($orientation);
+    }
+
+    /**
+     * Returns the formated data.
+     *
+     * @param Response $response
+     */
+    public function show(Response &$response)
+    {
+        static::$engine->show($response);
     }
 
     /**
@@ -168,11 +185,22 @@ class ExportManager
      */
     private function getExportClassName($option)
     {
-        $className = 'FacturaScripts\\Dinamic\\Lib\\Export\\' . $option . 'Export';
-        if (!class_exists($className)) {
-            $className = 'FacturaScripts\\Core\\Lib\\Export\\' . $option . 'Export';
-        }
+        $className = '\\FacturaScripts\\Dinamic\\Lib\\Export\\' . $option . 'Export';
+        return class_exists($className) ? $className : '\\FacturaScripts\\Core\\Lib\\Export\\' . $option . 'Export';
+    }
 
-        return $className;
+    /**
+     * Initialize options array
+     */
+    protected static function init()
+    {
+        if (static::$options === null) {
+            static::$options = [
+                'PDF' => ['description' => 'print', 'icon' => 'fas fa-print'],
+                'XLS' => ['description' => 'spreadsheet-xls', 'icon' => 'fas fa-file-excel'],
+                'CSV' => ['description' => 'structured-data-csv', 'icon' => 'fas fa-file-csv'],
+                'MAIL' => ['description' => 'email', 'icon' => 'fas fa-envelope'],
+            ];
+        }
     }
 }

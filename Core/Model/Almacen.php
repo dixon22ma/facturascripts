@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,22 +10,19 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * The warehouse where the items are physically.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class Almacen extends Base\Address
 {
@@ -38,6 +35,13 @@ class Almacen extends Base\Address
      * @var string
      */
     public $codalmacen;
+
+    /**
+     * Foreign Key with Empresas table.
+     *
+     * @var int
+     */
+    public $idempresa;
 
     /**
      * Store name.
@@ -54,13 +58,39 @@ class Almacen extends Base\Address
     public $telefono;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
+     * Removed warehouse from database.
+     * 
+     * @return bool
+     */
+    public function delete()
+    {
+        if ($this->isDefault()) {
+            $this->toolBox()->i18nLog()->warning('cant-delete-default-warehouse');
+            return false;
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * 
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'almacenes';
+        /// needed dependencies
+        new Empresa();
+        return parent::install();
+    }
+
+    /**
+     * Returns True if this is the default wharehouse.
+     *
+     * @return bool
+     */
+    public function isDefault()
+    {
+        return $this->codalmacen === $this->toolBox()->appSettings()->get('default', 'codalmacen');
     }
 
     /**
@@ -84,13 +114,13 @@ class Almacen extends Base\Address
     }
 
     /**
-     * Returns True if is the default wharehouse for the company.
+     * Returns the name of the table that uses this model.
      *
-     * @return bool
+     * @return string
      */
-    public function isDefault()
+    public static function tableName()
     {
-        return $this->codalmacen === AppSettings::get('default', 'codalmacen');
+        return 'almacenes';
     }
 
     /**
@@ -100,10 +130,32 @@ class Almacen extends Base\Address
      */
     public function test()
     {
-        parent::test();
-        $this->nombre = Utils::noHtml($this->nombre);
-        $this->telefono = Utils::noHtml($this->telefono);
-        
-        return !empty($this->codalmacen);
+        if (!empty($this->codalmacen) && !preg_match('/^[A-Z0-9_\+\.\-]{1,4}$/i', $this->codalmacen)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codalmacen, '%column%' => 'codalmacen', '%min%' => '1', '%max%' => '4']
+            );
+            return false;
+        }
+
+        $utils = $this->toolBox()->utils();
+        $this->nombre = $utils->noHtml($this->nombre);
+        $this->telefono = $utils->noHtml($this->telefono);
+        return parent::test();
+    }
+
+    /**
+     * 
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codalmacen)) {
+            $this->codalmacen = (string) $this->newCode();
+        }
+
+        return parent::saveInsert($values);
     }
 }

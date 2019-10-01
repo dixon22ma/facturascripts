@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,30 +10,30 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
 use FacturaScripts\Core\Base\Controller;
 use FacturaScripts\Core\Base\ControllerPermissions;
-use FacturaScripts\Core\Lib\Accounting;
-use FacturaScripts\Core\Lib\ExportManager;
-use FacturaScripts\Core\Model\Ejercicio;
-use FacturaScripts\Core\Model\User;
+use FacturaScripts\Dinamic\Lib\Accounting;
+use FacturaScripts\Dinamic\Lib\ExportManager;
+use FacturaScripts\Dinamic\Model\Ejercicio;
+use FacturaScripts\Dinamic\Model\User;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Description of AccountingReports
  *
- * @author Carlos García Gómez
+ * @author Carlos García Gómez <carlos@facturascripts.com>
  */
 class AccountingReports extends Controller
 {
+
     /**
      * List of exercices.
      *
@@ -47,6 +47,35 @@ class AccountingReports extends Controller
      * @var ExportManager
      */
     public $exportManager;
+
+    /**
+     * Return the basic data for this page.
+     *
+     * @return array
+     */
+    public function getPageData()
+    {
+        $data = parent::getPageData();
+        $data['menu'] = 'reports';
+        $data['title'] = 'accounting-reports';
+        $data['icon'] = 'fas fa-balance-scale';
+        return $data;
+    }
+
+    /**
+     * Return list of accounting documents
+     *
+     * @return array
+     */
+    public function getReports()
+    {
+        return [
+            'ledger' => ['description' => 'ledger', 'grouping' => true],
+            'balance-amounts' => ['description' => 'balance-amounts', 'grouping' => false],
+            'balance-sheet' => ['description' => 'balance-sheet', 'grouping' => false],
+            'profit' => ['description' => 'profit-and-loss-balance', 'grouping' => false],
+        ];
+    }
 
     /**
      * Runs the controller's private logic.
@@ -71,42 +100,42 @@ class AccountingReports extends Controller
 
     /**
      * Execute main actions.
-     *
+     * Filter bi date-from date-to format and grouping
+     * 
      * @param $action
      */
-    private function execAction($action)
+    protected function execAction($action)
     {
         $pages = [];
-        $dateFrom = $this->request->get('date-from');
-        $dateTo = $this->request->get('date-to');
-        $format = $this->request->get('format');
+        $dateFrom = $this->request->get('date-from', '');
+        $dateTo = $this->request->get('date-to', '');
+        $format = $this->request->get('format', '');
+        $params = ['grouping' => ('YES' == $this->request->get('grouping', 'YES'))];
 
         switch ($action) {
-            case 'libro-mayor':
-                $this->setTemplate(false);
+            case 'ledger':
                 $ledger = new Accounting\Ledger();
-                $pages = $ledger->generate($dateFrom, $dateTo);
+                $pages = $ledger->generate($dateFrom, $dateTo, $params);
                 break;
 
-            case 'sumas-saldos':
-                $balanceAmmount = new Accounting\BalanceAmmounts();
-                $pages = $balanceAmmount->generate($dateFrom, $dateTo);
+            case 'balance-amounts':
+                $balanceAmount = new Accounting\BalanceAmounts();
+                $pages = $balanceAmount->generate($dateFrom, $dateTo, $params);
                 break;
 
-            case 'situacion':
+            case 'balance-sheet':
                 $balanceSheet = new Accounting\BalanceSheet();
-                $pages = $balanceSheet->generate($dateFrom, $dateTo);
+                $pages = $balanceSheet->generate($dateFrom, $dateTo, $params);
                 break;
 
-            case 'pyg':
-                $proffitAndLoss = new Accounting\ProffitAndLoss();
-                $pages = $proffitAndLoss->generate($dateFrom, $dateTo);
+            case 'profit':
+                $profitAndLoss = new Accounting\ProfitAndLoss();
+                $pages = $profitAndLoss->generate($dateFrom, $dateTo, $params);
                 break;
         }
 
         if (empty($pages)) {
-            $this->miniLog->info($this->i18n->trans('no-data'));
-
+            $this->toolBox()->i18nLog()->warning('no-data');
             return;
         }
 
@@ -115,42 +144,12 @@ class AccountingReports extends Controller
     }
 
     /**
-     * Return list of accounting documents
-     *
-     * @return array
-     */
-    public function getReports()
-    {
-        return [
-            'libro-mayor' => 'ledger',
-            'sumas-saldos' => 'balance-ammounts',
-            'situacion' => 'balance-sheet',
-            'pyg' => 'profit-and-loss-balance',
-        ];
-    }
-
-    /**
-     * Return the basic data for this page.
-     *
-     * @return array
-     */
-    public function getPageData()
-    {
-        $pageData = parent::getPageData();
-        $pageData['menu'] = 'reports';
-        $pageData['title'] = 'accounting-reports';
-        $pageData['icon'] = 'fa-balance-scale';
-
-        return $pageData;
-    }
-
-    /**
      * Exports data to PDF.
      *
      * @param array  $pages
      * @param string $format
      */
-    private function exportData(&$pages, $format)
+    protected function exportData(&$pages, $format)
     {
         $this->exportManager->newDoc($format);
 
@@ -158,7 +157,7 @@ class AccountingReports extends Controller
             $headers = empty($data) ? [] : array_keys($data[0]);
             $this->exportManager->generateTablePage($headers, $data);
         }
-        
+
         $this->exportManager->show($this->response);
     }
 }

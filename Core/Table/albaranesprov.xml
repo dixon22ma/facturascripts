@@ -12,10 +12,6 @@
         <null>NO</null>
     </column>
     <column>
-        <name>codagente</name>
-        <type>character varying(10)</type>
-    </column>
-    <column>
         <name>codalmacen</name>
         <type>character varying(4)</type>
     </column>
@@ -37,6 +33,7 @@
     <column>
         <name>codpago</name>
         <type>character varying(10)</type>
+        <null>NO</null>
     </column>
     <column>
         <name>codproveedor</name>
@@ -48,35 +45,46 @@
         <null>NO</null>
     </column>
     <column>
+        <name>editable</name>
+        <type>boolean</type>
+    </column>
+    <column>
         <name>fecha</name>
         <type>date</type>
         <null>NO</null>
     </column>
     <column>
+        <name>femail</name>
+        <type>date</type>
+    </column>
+    <column>
         <name>hora</name>
-        <type>time without time zone</type>
+        <type>time</type>
     </column>
     <column>
         <name>idalbaran</name>
         <type>serial</type>
         <null>NO</null>
-        <default>nextval('albaranesprov_idalbaran_seq'::regclass)</default>
     </column>
     <column>
-        <name>idfactura</name>
+        <name>idempresa</name>
+        <type>integer</type>
+    </column>
+    <column>
+        <name>idestado</name>
         <type>integer</type>
     </column>
     <column>
         <name>irpf</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
     <column>
         <name>neto</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
+    </column>
+    <column>
+        <name>nick</name>
+        <type>character varying(50)</type>
     </column>
     <column>
         <name>nombre</name>
@@ -97,75 +105,59 @@
         <type>text</type>
     </column>
     <column>
-        <name>femail</name>
-        <type>date</type>
-    </column>
-    <column>
-        <name>editable</name>
-        <type>boolean</type>
-    </column>
-    <column>
-        <name>idestado</name>
-        <type>integer</type>
-    </column>
-    <column>
         <name>tasaconv</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>1</default>
     </column>
     <column>
         <name>total</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
     <column>
         <name>totaleuros</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
     <column>
         <name>totalirpf</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
     <column>
         <name>totaliva</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
     <column>
         <name>totalrecargo</name>
         <type>double precision</type>
-        <null>NO</null>
-        <default>0</default>
     </column>
-    <column>
-        <name>idempresa</name>
-        <type>integer</type>
-    </column>
-    <constraint>
-        <name>ca_albaranesprov_series2</name>
-        <type>FOREIGN KEY (codserie) REFERENCES series (codserie) ON DELETE RESTRICT ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>ca_albaranesprov_ejercicios2</name>
-        <type>FOREIGN KEY (codejercicio) REFERENCES ejercicios (codejercicio) ON DELETE RESTRICT ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>ca_albaranesprov_facturas</name>
-        <type>FOREIGN KEY (idfactura) REFERENCES facturasprov (idfactura) ON DELETE SET NULL ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>uniq_codigo_albaranesprov</name>
-        <type>UNIQUE (codigo)</type>
-    </constraint>
     <constraint>
         <name>albaranesprov_pkey</name>
         <type>PRIMARY KEY (idalbaran)</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_almacenes</name>
+        <type>FOREIGN KEY (codalmacen) REFERENCES almacenes (codalmacen) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_ejercicios</name>
+        <type>FOREIGN KEY (codejercicio) REFERENCES ejercicios (codejercicio) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_empresas</name>
+        <type>FOREIGN KEY (idempresa) REFERENCES empresas (idempresa) ON DELETE CASCADE ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_proveedores</name>
+        <type>FOREIGN KEY (codproveedor) REFERENCES proveedores (codproveedor) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_series</name>
+        <type>FOREIGN KEY (codserie) REFERENCES series (codserie) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_albaranesprov_users</name>
+        <type>FOREIGN KEY (nick) REFERENCES users (nick) ON DELETE SET NULL ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>uniq_codigo_albaranesprov</name>
+        <type>UNIQUE (codigo,idempresa)</type>
     </constraint>
 </table>

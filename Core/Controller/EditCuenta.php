@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,79 +10,116 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\BaseView;
+use FacturaScripts\Core\Lib\ExtendedController\EditController;
 
 /**
  * Controller to edit a single item from the Cuenta model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
- * @author PC REDNET S.L. <luismi@pcrednet.com>
+ * @author Carlos García Gómez          <carlos@facturascripts.com>
+ * @author Artex Trading sa             <jcuello@artextrading.com>
+ * @author PC REDNET S.L.               <luismi@pcrednet.com>
+ * @author Cristo M. Estévez Hernández  <cristom.estevez@gmail.com>
  */
-class EditCuenta extends ExtendedController\PanelController
+class EditCuenta extends EditController
 {
+
     /**
-     * Load views
+     * Returns the class name of the model to use in the editView.
+     * 
+     * @return string
      */
-    protected function createViews()
+    public function getModelClassName()
     {
-        $this->addEditView('\FacturaScripts\Dinamic\Model\Cuenta', 'EditCuenta', 'account');
-        $this->addListView('\FacturaScripts\Dinamic\Model\Subcuenta', 'ListSubcuenta', 'subaccounts');
-        $this->addListView('\FacturaScripts\Dinamic\Model\Cuenta', 'ListCuenta', 'children-accounts');
-        $this->setTabsPosition('bottom');
+        return 'Cuenta';
     }
 
     /**
-     * Load view data procedure
-     *
-     * @param string                      $keyView
-     * @param ExtendedController\EditView $view
-     */
-    protected function loadData($keyView, $view)
-    {
-        switch ($keyView) {
-            case 'EditCuenta':
-                $code = $this->request->get('code');
-                $view->loadData($code);
-                break;
-
-            case 'ListSubcuenta':
-                $idcuenta = $this->getViewModelValue('EditCuenta', 'idcuenta');
-                $where = [new DataBaseWhere('idcuenta', $idcuenta)];
-                $view->loadData(false, $where);
-                break;
-
-            case 'ListCuenta':
-                $idcuenta = $this->getViewModelValue('EditCuenta', 'idcuenta');
-                $where = [new DataBaseWhere('parent_idcuenta', $idcuenta)];
-                $view->loadData(false, $where);
-                break;
-        }
-    }
-
-    /**
-     * Returns basic page attributes
+     * Returns basic page attributes.
      *
      * @return array
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'accounts';
-        $pagedata['menu'] = 'accounting';
-        $pagedata['icon'] = 'fa-bar-chart';
-        $pagedata['showonmenu'] = false;
+        $data = parent::getPageData();
+        $data['menu'] = 'accounting';
+        $data['title'] = 'account';
+        $data['icon'] = 'fas fa-book';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createAccountingView($viewName = 'ListCuenta')
+    {
+        $this->addListView($viewName, 'Cuenta', 'children-accounts', 'fas fa-level-down-alt');
+        $this->views[$viewName]->addOrderBy(['codcuenta'], 'code', 1);
+
+        /// disable columns
+        $this->views[$viewName]->disableColumn('fiscal-exercise');
+        $this->views[$viewName]->disableColumn('parent-account');
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createSubAccountingView($viewName = 'ListSubcuenta')
+    {
+        $this->addListView($viewName, 'Subcuenta', 'subaccounts');
+        $this->views[$viewName]->addOrderBy(['codsubcuenta'], 'code', 1);
+        $this->views[$viewName]->addOrderBy(['saldo'], 'balance');
+
+        /// disable columns
+        $this->views[$viewName]->disableColumn('fiscal-exercise');
+    }
+
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        parent::createViews();
+        $this->setTabsPosition('bottom');
+
+        $this->createSubAccountingView();
+        $this->createAccountingView();
+    }
+
+    /**
+     * Load view data procedure
+     *
+     * @param string   $viewName
+     * @param BaseView $view
+     */
+    protected function loadData($viewName, $view)
+    {
+        $idcuenta = $this->getViewModelValue('EditCuenta', 'idcuenta');
+        switch ($viewName) {
+            case 'ListCuenta':
+                $where = [new DataBaseWhere('parent_idcuenta', $idcuenta)];
+                $view->loadData('', $where);
+                break;
+
+            case 'ListSubcuenta':
+                $where = [new DataBaseWhere('idcuenta', $idcuenta)];
+                $view->loadData('', $where);
+                break;
+
+            default:
+                parent::loadData($viewName, $view);
+                break;
+        }
     }
 }

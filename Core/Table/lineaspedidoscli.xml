@@ -7,6 +7,12 @@
 -->
 <table>
     <column>
+        <name>actualizastock</name>
+        <type>integer</type>
+        <null>NO</null>
+        <default>-2</default>
+    </column>
+    <column>
         <name>cantidad</name>
         <type>double precision</type>
         <null>NO</null>
@@ -14,17 +20,10 @@
     <column>
         <name>codimpuesto</name>
         <type>character varying(10)</type>
-        <null>YES</null>
     </column>
     <column>
         <name>descripcion</name>
         <type>text</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>dtolineal</name>
-        <type>double precision</type>
-        <default>0</default>
     </column>
     <column>
         <name>dtopor</name>
@@ -35,11 +34,6 @@
         <name>idlinea</name>
         <type>serial</type>
         <null>NO</null>
-        <default>nextval('lineaspedidoscli_idlinea_seq'::regclass)</default>
-    </column>
-    <column>
-        <name>idlineapresupuesto</name>
-        <type>integer</type>
     </column>
     <column>
         <name>idpedido</name>
@@ -47,18 +41,37 @@
         <null>NO</null>
     </column>
     <column>
-        <name>idpresupuesto</name>
+        <name>idproducto</name>
         <type>integer</type>
     </column>
     <column>
         <name>irpf</name>
         <type>double precision</type>
-        <null>YES</null>
     </column>
     <column>
         <name>iva</name>
         <type>double precision</type>
         <null>NO</null>
+    </column>
+    <column>
+        <name>mostrar_cantidad</name>
+        <type>boolean</type>
+        <default>true</default>
+    </column>
+    <column>
+        <name>mostrar_precio</name>
+        <type>boolean</type>
+        <default>true</default>
+    </column>
+    <column>
+        <name>orden</name>
+        <type>integer</type>
+        <default>0</default>
+    </column>
+    <column>
+        <name>porcomision</name>
+        <type>double precision</type>
+        <default>0</default>
     </column>
     <column>
         <name>pvpsindto</name>
@@ -78,45 +91,32 @@
     <column>
         <name>recargo</name>
         <type>double precision</type>
-        <null>YES</null>
+        <null>NO</null>
     </column>
     <column>
         <name>referencia</name>
         <type>character varying(30)</type>
-        <null>YES</null>
     </column>
     <column>
-        <name>codcombinacion</name>
-        <type>character varying(18)</type>
-    </column>
-    <column>
-        <name>totalenalbaran</name>
+        <name>servido</name>
         <type>double precision</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>orden</name>
-        <type>integer</type>
+        <null>NO</null>
         <default>0</default>
-    </column>
-    <column>
-        <name>mostrar_cantidad</name>
-        <type>boolean</type>
-        <default>true</default>
-    </column>
-    <column>
-        <name>mostrar_precio</name>
-        <type>boolean</type>
-        <default>true</default>
     </column>
     <constraint>
         <name>lineaspedidoscli_pkey</name>
         <type>PRIMARY KEY (idlinea)</type>
     </constraint>
     <constraint>
+        <name>ca_lineaspedidoscli_impuestos</name>
+        <type>FOREIGN KEY (codimpuesto) REFERENCES impuestos (codimpuesto) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_lineaspedidoscli_productos</name>
+        <type>FOREIGN KEY (idproducto) REFERENCES productos (idproducto) ON DELETE SET NULL ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
         <name>ca_lineaspedidoscli_pedidoscli</name>
-        <type>FOREIGN KEY (idpedido)
-            REFERENCES pedidoscli (idpedido)
-            ON DELETE CASCADE ON UPDATE CASCADE</type>
+        <type>FOREIGN KEY (idpedido) REFERENCES pedidoscli (idpedido) ON DELETE CASCADE ON UPDATE CASCADE</type>
     </constraint>
 </table>

@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * Defines which accounts must be used to generate the different accounting reports.
@@ -28,6 +25,7 @@ use FacturaScripts\Core\Base\Utils;
  */
 class Balance extends Base\ModelClass
 {
+
     use Base\ModelTrait;
 
     /**
@@ -115,16 +113,6 @@ class Balance extends Base\ModelClass
     public $naturaleza;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
-    {
-        return 'co_codbalances08';
-    }
-
-    /**
      * Returns the name of the column that is the model's primary key.
      *
      * @return string
@@ -135,18 +123,36 @@ class Balance extends Base\ModelClass
     }
 
     /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'balances';
+    }
+
+    /**
      * Test model's data.
      *
      * @return bool
      */
     public function test()
     {
-        $this->descripcion1 = Utils::noHtml($this->descripcion1);
-        $this->descripcion2 = Utils::noHtml($this->descripcion2);
-        $this->descripcion3 = Utils::noHtml($this->descripcion3);
-        $this->descripcion4 = Utils::noHtml($this->descripcion4);
-        $this->descripcion4ba = Utils::noHtml($this->descripcion4ba);
+        if (!preg_match('/^[A-Z0-9_\+\.\-]{1,15}$/i', $this->codbalance)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codbalance, '%column%' => 'codbalance', '%min%' => '1', '%max%' => '15']
+            );
+            return false;
+        }
 
-        return true;
+        $utils = $this->toolBox()->utils();
+        $this->descripcion1 = $utils->noHtml($this->descripcion1);
+        $this->descripcion2 = $utils->noHtml($this->descripcion2);
+        $this->descripcion3 = $utils->noHtml($this->descripcion3);
+        $this->descripcion4 = $utils->noHtml($this->descripcion4);
+        $this->descripcion4ba = $utils->noHtml($this->descripcion4ba);
+        return parent::test();
     }
 }

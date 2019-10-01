@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,17 +10,18 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Base;
-use FacturaScripts\Core\Model;
+use FacturaScripts\Core\Base\Controller;
+use FacturaScripts\Core\Base\ControllerPermissions;
+use FacturaScripts\Dinamic\Model\Page;
+use FacturaScripts\Dinamic\Model\User;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -28,8 +29,9 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
-class MegaSearch extends Base\Controller
+class MegaSearch extends Controller
 {
+
     /**
      * This variable contains the input text as the $query parameter
      * to be used to filter the model data
@@ -53,55 +55,84 @@ class MegaSearch extends Base\Controller
     public $sections;
 
     /**
-     * Runs the controller's private logic.
-     *
-     * @param Response                   $response
-     * @param Model\User                 $user
-     * @param Base\ControllerPermissions $permissions
-     */
-    public function privateCore(&$response, $user, $permissions)
-    {
-        parent::privateCore($response, $user, $permissions);
-
-        $this->query = mb_strtolower($this->request->request->get('query', ''), 'UTF8');
-        $this->results = ['pages' => []];
-        $this->sections = [];
-
-        if ($this->query !== '') {
-            $this->pageSearch();
-        }
-    }
-
-    /**
      * Returns basic page attributes
      *
      * @return array
      */
     public function getPageData()
     {
-        $pageData = parent::getPageData();
-        $pageData['showonmenu'] = false;
+        $data = parent::getPageData();
+        $data['menu'] = 'reports';
+        $data['showonmenu'] = false;
+        return $data;
+    }
 
-        return $pageData;
+    /**
+     * Runs the controller's private logic.
+     *
+     * @param Response              $response
+     * @param User                  $user
+     * @param ControllerPermissions $permissions
+     */
+    public function privateCore(&$response, $user, $permissions)
+    {
+        parent::privateCore($response, $user, $permissions);
+        $this->results = [];
+        $this->sections = [];
+
+        $query = $this->request->request->get('query', '');
+        $this->query = $this->toolBox()->utils()->noHtml(mb_strtolower($query, 'UTF8'));
+        if ($this->query !== '') {
+            $this->search();
+        }
     }
 
     /**
      * Proceeds to search in the whole page
      */
-    private function pageSearch()
+    protected function pageSearch()
     {
-        $pageModel = new Model\Page();
+        $results = [];
+        $pageModel = new Page();
+        $i18n = $this->toolBox()->i18n();
         foreach ($pageModel->all([], [], 0, 500) as $page) {
+            if (!$page->showonmenu) {
+                continue;
+            }
+
             /// Does the page title coincide with the search $query?
-            $title = mb_strtolower($this->i18n->trans($page->title), 'UTF8');
-            if ($page->showonmenu && strpos($title, $this->query) !== false) {
-                $this->results['pages'][] = $page;
+            $translation = mb_strtolower($i18n->trans($page->title), 'UTF8');
+            if (stripos($page->title, $this->query) !== false || stripos($translation, $this->query) !== false) {
+                $results[] = [
+                    'icon' => $page->icon,
+                    'link' => $page->url(),
+                    'menu' => $i18n->trans($page->menu),
+                    'submenu' => $i18n->trans($page->submenu),
+                    'title' => $i18n->trans($page->title),
+                ];
             }
 
             /// Is it a ListController that could return more results?
-            if ($page->showonmenu && strpos($page->name, 'List') === 0) {
+            if (strpos($page->name, 'List') === 0) {
                 $this->sections[$page->name] = $page->url() . '?action=megasearch&query=' . $this->query;
             }
         }
+
+        if (!empty($results)) {
+            $this->results['pages'] = [
+                'columns' => ['icon' => 'icon', 'menu' => 'menu', 'submenu' => 'submenu', 'title' => 'title'],
+                'icon' => 'fas fa-mouse-pointer',
+                'title' => 'pages',
+                'results' => $results,
+            ];
+        }
+    }
+
+    /**
+     * Presform all initial searches.
+     */
+    protected function search()
+    {
+        $this->pageSearch();
     }
 }

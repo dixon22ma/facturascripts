@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2016-2018    Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,74 +10,97 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+
 /**
- * Description of transferencia_stock
+ * The head of transfer.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
+ * @author Cristo M. Estévez Hernández  <cristom.estevez@gmail.com>
+ * @author Carlos García Gómez          <carlos@facturascripts.com>
  */
 class TransferenciaStock extends Base\ModelClass
 {
+
     use Base\ModelTrait;
 
     /**
-     * Primary key. integer
-     *
-     * @var int
-     */
-    public $idtrans;
-
-    /**
-     * Código de almacén de destino
+     * Warehouse of destination. Varchar (4).
      *
      * @var string
      */
-    public $codalmadestino;
+    public $codalmacendestino;
 
     /**
-     * Código de almacén de origen
+     * Warehouse of origin. Varchar (4).
      *
      * @var string
      */
-    public $codalmaorigen;
+    public $codalmacenorigen;
 
     /**
-     * Fecha de la transferencia
+     * Date of transfer.
      *
      * @var string
      */
     public $fecha;
 
     /**
-     * Hora de la transferencia
+     * Primary key autoincremental.
+     *
+     * @var int
+     */
+    public $idtrans;
+
+    /**
+     * User of transfer action. Varchar (50).
      *
      * @var string
      */
-    public $hora;
+    public $nick;
 
     /**
-     * Usuario que realiza la transferencia
      *
      * @var string
      */
-    public $usuario;
+    public $observaciones;
 
-    /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
+    public function clear()
     {
-        return 'transstock';
+        parent::clear();
+        $this->fecha = date('d-m-Y H:i:s');
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    public function delete()
+    {
+        /// remove lines to force update stock
+        foreach ($this->getLines() as $line) {
+            $line->delete();
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * 
+     * @return LineaTransferenciaStock[]
+     */
+    public function getLines()
+    {
+        $line = new LineaTransferenciaStock();
+        $where = [new DataBaseWhere('idtrans', $this->primaryColumnValue())];
+        return $line->all($where, [], 0, 0);
     }
 
     /**
@@ -91,28 +114,58 @@ class TransferenciaStock extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
      */
-    public function clear()
+    public static function tableName()
     {
-        parent::clear();
-        $this->fecha = date('d-m-Y');
-        $this->hora = date('H:i:s');
+        return 'transferenciasstock';
     }
 
     /**
-     * Returns True if there is no errors on properties values.
-     *
+     * 
      * @return bool
      */
     public function test()
     {
-        if ($this->codalmadestino === $this->codalmaorigen) {
-            self::$miniLog->alert(self::$i18n->trans('warehouse-cant-be-same'));
+        $this->observaciones = $this->toolBox()->utils()->noHtml($this->observaciones);
 
+        if ($this->codalmacenorigen == $this->codalmacendestino) {
+            $this->toolBox()->i18nLog()->warning('warehouse-cant-be-same');
             return false;
         }
 
-        return true;
+        if ($this->getIdempresa($this->codalmacendestino) !== $this->getIdempresa($this->codalmacenorigen)) {
+            $this->toolBox()->i18nLog()->warning('warehouse-must-be-same-business');
+            return false;
+        }
+
+        return parent::test();
+    }
+
+    /**
+     * 
+     * @param string $type
+     * @param string $list
+     * 
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'ListAlmacen?activetab=List')
+    {
+        return parent::url($type, $list);
+    }
+
+    /**
+     * 
+     * @param string $codalmacen
+     *
+     * @return int
+     */
+    protected function getIdempresa($codalmacen)
+    {
+        $warehouse = new Almacen;
+        $warehouse->loadFromCode($codalmacen);
+        return $warehouse->idempresa;
     }
 }

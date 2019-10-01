@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,27 +10,23 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\App;
 
-use DebugBar\StandardDebugBar;
 use Exception;
-use FacturaScripts\Core\Base\DebugBar\DataBaseCollector;
-use FacturaScripts\Core\Base\DebugBar\TranslationCollector;
 use FacturaScripts\Core\Base\Controller;
 use FacturaScripts\Core\Base\ControllerPermissions;
+use FacturaScripts\Core\Base\Debug\DumbBar;
 use FacturaScripts\Core\Base\MenuManager;
-use FacturaScripts\Core\Model\User;
+use FacturaScripts\Dinamic\Lib\AssetManager;
+use FacturaScripts\Dinamic\Model\User;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Response;
-use Twig_Function;
-use Twig_Environment;
-use Twig_Loader_Filesystem;
 
 /**
  * Class to manage selected controller.
@@ -40,26 +36,14 @@ use Twig_Loader_Filesystem;
 class AppController extends App
 {
 
+    const USER_UPDATE_ACTIVITY_PERIOD = 3600;
+
     /**
      * Controller loaded
      *
      * @var Controller
      */
     private $controller;
-
-    /**
-     * PHDebugBar.
-     *
-     * @var StandardDebugBar
-     */
-    private $debugBar;
-
-    /**
-     * Langcode to use in html.
-     *
-     * @var string
-     */
-    private $langcode2;
 
     /**
      * Load user's menu
@@ -69,22 +53,48 @@ class AppController extends App
     private $menuManager;
 
     /**
+     * Contains the page name.
+     *
+     * @var string
+     */
+    private $pageName;
+
+    /**
+     *
+     * @var User|false
+     */
+    private $user = false;
+
+    /**
      * Initializes the app.
      *
      * @param string $uri
+     * @param string $pageName
      */
-    public function __construct($uri = '/')
+    public function __construct(string $uri = '/', string $pageName = '')
     {
         parent::__construct($uri);
-        $this->debugBar = new StandardDebugBar();
-        if (FS_DEBUG) {
-            $this->debugBar['time']->startMeasure('init', 'AppController::__construct()');
-            $this->debugBar->addCollector(new DataBaseCollector($this->miniLog));
-            $this->debugBar->addCollector(new TranslationCollector($this->i18n));
-        }
-
-        $this->langcode2 = substr($this->request->cookies->get('fsLang', FS_LANG), 0, 2);
         $this->menuManager = new MenuManager();
+        $this->pageName = $pageName;
+    }
+
+    /**
+     *
+     * @param string $nick
+     */
+    public function close(string $nick = '')
+    {
+        $selectedNick = (false !== $this->user) ? $this->user->nick : '';
+        parent::close($selectedNick);
+    }
+
+    /**
+     * 
+     * @return DumbBar
+     */
+    public function debugBar()
+    {
+        return new DumbBar();
     }
 
     /**
@@ -92,29 +102,42 @@ class AppController extends App
      *
      * @return bool
      */
-    public function run()
+    public function run(): bool
     {
-        if (!$this->dataBase->connected()) {
-            $this->response->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR);
-            $this->renderHtml('Error/DbError.html.twig');
-        } elseif ($this->isIPBanned()) {
-            $this->response->setStatusCode(Response::HTTP_FORBIDDEN);
-            $this->response->setContent('IP-BANNED');
+        if (!parent::run()) {
+            return false;
         } elseif ($this->request->query->get('logout')) {
             $this->userLogout();
             $this->renderHtml('Login/Login.html.twig');
-        } else {
-            $user = $this->userAuth();
-
-            /// returns the name of the controller to load
-            $pageName = $this->getPageName($user);
-            $this->loadController($pageName, $user);
-
-            /// returns true for testing purpose
-            return true;
+            $route = empty(\FS_ROUTE) ? 'index.php' : \FS_ROUTE;
+            $this->response->headers->set('Refresh', '0; ' . $route);
+            return false;
         }
 
-        return false;
+        $this->user = $this->userAuth();
+
+        /// returns the name of the controller to load
+        $pageName = $this->getPageName();
+        $this->loadController($pageName);
+
+        /// returns true for testing purpose
+        return true;
+    }
+
+    /**
+     * 
+     * @param int    $status
+     * @param string $message
+     */
+    protected function die(int $status, string $message = '')
+    {
+        $content = $this->toolBox()->i18n()->trans($message);
+        foreach ($this->toolBox()->log()->readAll() as $log) {
+            $content .= empty($content) ? $log["message"] : "\n" . $log["message"];
+        }
+
+        $this->response->setContent(nl2br($content));
+        $this->response->setStatusCode($status);
     }
 
     /**
@@ -124,89 +147,67 @@ class AppController extends App
      *
      * @return string
      */
-    private function getControllerFullName($pageName)
+    private function getControllerFullName(string $pageName)
     {
-        $controllerName = "FacturaScripts\\Dinamic\\Controller\\{$pageName}";
-        if (!class_exists($controllerName)) {
-            $controllerName = "FacturaScripts\\Core\\Controller\\{$pageName}";
-            if (FS_DEBUG) {
-                $this->pluginManager->deploy();
-            }
-        }
-
-        return $controllerName;
+        $controllerName = '\\FacturaScripts\\Dinamic\\Controller\\' . $pageName;
+        return class_exists($controllerName) ? $controllerName : '\\FacturaScripts\\Core\\Controller\\' . $pageName;
     }
 
     /**
      * Returns the name of the default controller for the current user or for all users.
      *
-     * @param User|false $user
-     *
      * @return string
      */
-    private function getPageName($user)
+    private function getPageName()
     {
+        if ($this->pageName !== '') {
+            return $this->pageName;
+        }
+
         if ($this->getUriParam(0) !== 'index.php' && $this->getUriParam(0) !== '') {
             return $this->getUriParam(0);
         }
 
-        if ($user && $user->homepage !== null && $user->homepage !== '') {
-            return $user->homepage;
+        if ($this->user && !empty($this->user->homepage)) {
+            return $this->user->homepage;
         }
 
-        return $this->settings->get('default', 'homepage', 'Wizard');
+        return $this->toolBox()->appSettings()->get('default', 'homepage', 'Wizard');
     }
 
     /**
      * Load and process the $pageName controller.
      *
-     * @param string     $pageName
-     * @param User|false $user
+     * @param string $pageName
      */
-    private function loadController($pageName, $user)
+    protected function loadController(string $pageName)
     {
-        if (FS_DEBUG) {
-            $this->debugBar['time']->stopMeasure('init');
-            $this->debugBar['time']->startMeasure('loadController', 'AppController::loadController()');
-        }
-
         $controllerName = $this->getControllerFullName($pageName);
         $template = 'Error/ControllerNotFound.html.twig';
-        $httpStatus = Response::HTTP_NOT_FOUND;
 
         /// If we found a controller, load it
         if (class_exists($controllerName)) {
-            $this->miniLog->debug($this->i18n->trans('loading-controller', ['%controllerName%' => $controllerName]));
-            $this->menuManager->setUser($user);
-            $permissions = new ControllerPermissions($user, $pageName);
+            $this->toolBox()->i18nLog()->debug('loading-controller', ['%controllerName%' => $controllerName]);
+            $this->menuManager->setUser($this->user);
+            $permissions = new ControllerPermissions($this->user, $pageName);
 
-            try {
-                $this->controller = new $controllerName($this->cache, $this->i18n, $this->miniLog, $pageName);
-                if ($user === false) {
-                    $this->controller->publicCore($this->response);
-                    $template = $this->controller->getTemplate();
-                } elseif ($permissions->allowAccess) {
-                    $this->menuManager->selectPage($this->controller->getPageData());
-                    $this->controller->privateCore($this->response, $user, $permissions);
-                    $template = $this->controller->getTemplate();
-                } else {
-                    $template = 'Error/AccessDenied.html.twig';
-                }
-
-                $httpStatus = Response::HTTP_OK;
-            } catch (Exception $exc) {
-                $this->debugBar['exceptions']->addException($exc);
-                $httpStatus = Response::HTTP_INTERNAL_SERVER_ERROR;
+            $this->controller = new $controllerName($pageName, $this->uri);
+            if ($this->user === false) {
+                $this->controller->publicCore($this->response);
+                $template = $this->controller->getTemplate();
+            } elseif ($permissions->allowAccess) {
+                $this->menuManager->selectPage($this->controller->getPageData());
+                $this->controller->privateCore($this->response, $this->user, $permissions);
+                $template = $this->controller->getTemplate();
+            } else {
+                $template = 'Error/AccessDenied.html.twig';
             }
+        } else {
+            $this->toolBox()->i18nLog()->critical('controller-not-found');
+            $this->response->setStatusCode(Response::HTTP_NOT_FOUND);
         }
 
-        $this->response->setStatusCode($httpStatus);
         if ($template) {
-            if (FS_DEBUG) {
-                $this->debugBar['time']->stopMeasure('loadController');
-                $this->debugBar['time']->startMeasure('renderHtml', 'AppController::renderHtml()');
-            }
-
             $this->renderHtml($template, $controllerName);
         }
     }
@@ -215,87 +216,32 @@ class AppController extends App
      * Creates HTML with the selected template. The data will not be inserted in it
      * until render() is executed
      *
-     * @param string $template       html file to use
+     * @param string $template
      * @param string $controllerName
      */
-    private function renderHtml($template, $controllerName = '')
+    protected function renderHtml(string $template, string $controllerName = '')
     {
-        /// Load the template engine
-        $twigLoader = $this->loadTwigFolders();
-
-        /// Twig options
-        $twigOptions = ['cache' => FS_FOLDER . '/MyFiles/Cache/Twig'];
-
         /// HTML template variables
         $templateVars = [
-            'appSettings' => $this->settings,
+            'appSettings' => $this->toolBox()->appSettings(),
+            'assetManager' => new AssetManager(),
             'controllerName' => $controllerName,
-            'debugBarRender' => false,
+            'debugBarRender' => $this->debugBar(),
             'fsc' => $this->controller,
-            'i18n' => $this->i18n,
-            'langcode2' => $this->langcode2,
-            'log' => $this->miniLog,
             'menuManager' => $this->menuManager,
-            'sql' => $this->miniLog->read(['sql']),
             'template' => $template,
         ];
 
-        if (FS_DEBUG) {
-            unset($twigOptions['cache']);
-            $twigOptions['debug'] = true;
-
-            $baseUrl = FS_ROUTE . '/vendor/maximebf/debugbar/src/DebugBar/Resources/';
-            $templateVars['debugBarRender'] = $this->debugBar->getJavascriptRenderer($baseUrl);
-
-            /// add log data to the debugBar
-            foreach ($this->miniLog->read(['debug']) as $msg) {
-                $this->debugBar['messages']->info($msg['message']);
-            }
-            $this->debugBar['messages']->info('END');
-        }
-        $twig = new Twig_Environment($twigLoader, $twigOptions);
-        $assetFunction = new Twig_Function('asset', function ($string) {
-            return FS_ROUTE . '/' . $string;
-        });
-        $twig->addFunction($assetFunction);
+        $webRender = new WebRender();
+        $webRender->loadPluginFolders();
 
         try {
-            $this->response->setContent($twig->render($template, $templateVars));
+            $this->response->setContent($webRender->render($template, $templateVars));
         } catch (Exception $exc) {
-            $this->debugBar['exceptions']->addException($exc);
-            $this->response->setContent($twig->render('Error/TemplateError.html.twig', $templateVars));
+            $this->toolBox()->log()->critical($exc->getMessage());
+            $this->response->setContent($webRender->render('Error/TemplateError.html.twig', $templateVars));
             $this->response->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-    }
-
-    /**
-     * Returns a TwigLoader object with the folders selecteds
-     *
-     * @return Twig_Loader_Filesystem
-     */
-    private function loadTwigFolders()
-    {
-        /// Path for default namespace
-        $path = FS_DEBUG ? FS_FOLDER . '/Core/View' : FS_FOLDER . '/Dinamic/View';
-        $twigLoader = new Twig_Loader_Filesystem($path);
-
-        /// Core namespace
-        $twigLoader->addPath(FS_FOLDER . '/Core/View', 'Core');
-
-        foreach ($this->pluginManager->enabledPlugins() as $pluginName) {
-            $pluginPath = FS_FOLDER . '/Plugins/' . $pluginName . '/View';
-            if (!file_exists($pluginPath)) {
-                continue;
-            }
-
-            /// plugin namespace
-            $twigLoader->addPath($pluginPath, 'Plugin' . $pluginName);
-            if (FS_DEBUG) {
-                $twigLoader->prependPath($pluginPath);
-            }
-        }
-
-        return $twigLoader;
     }
 
     /**
@@ -305,69 +251,90 @@ class AppController extends App
      */
     private function userAuth()
     {
-        $user0 = new User();
+        $user = new User();
         $nick = $this->request->request->get('fsNick', '');
+        if ($nick === '') {
+            return $this->cookieAuth($user);
+        }
 
-        if ($nick !== '') {
-            $user = $user0->get($nick);
-            if ($user) {
-                if ($user->verifyPassword($this->request->request->get('fsPassword'))) {
-                    $logKey = $user->newLogkey($this->request->getClientIp());
-                    $user->save();
-                    $expire = time() + FS_COOKIES_EXPIRE;
-                    $this->response->headers->setCookie(new Cookie('fsNick', $user->nick, $expire));
-                    $this->response->headers->setCookie(new Cookie('fsLogkey', $logKey, $expire));
-                    $this->response->headers->setCookie(new Cookie('fsLang', $user->langcode, $expire));
-                    $this->response->headers->setCookie(new Cookie('fsCompany', $user->idempresa, $expire));
-                    $this->miniLog->debug($this->i18n->trans('login-ok', ['%nick%' => $nick]));
+        if ($user->loadFromCode($nick) && $user->enabled) {
+            if ($user->verifyPassword($this->request->request->get('fsPassword'))) {
+                /// TODO: remove after 2018.13
+                $this->toolBox()->events()->trigger('App:User:Login', $user);
 
-                    return $user;
-                }
+                /// Execute actions from User model extensions
+                $user->pipe('login');
 
-                $this->ipFilter->setAttempt($this->request->getClientIp());
-                $this->miniLog->alert($this->i18n->trans('login-password-fail'));
-
-                return false;
+                $this->updateCookies($user, true);
+                $this->toolBox()->ipFilter()->clear();
+                $this->toolBox()->i18nLog()->debug('login-ok', ['%nick%' => $nick]);
+                return $user;
             }
 
-            $this->ipFilter->setAttempt($this->request->getClientIp());
-            $this->miniLog->alert($this->i18n->trans('login-user-not-found'));
-
+            $this->ipWarning();
+            $this->toolBox()->i18nLog()->warning('login-password-fail');
             return false;
         }
 
-        return $this->cookieAuth($user0);
+        $this->ipWarning();
+        $this->toolBox()->i18nLog()->warning('login-user-not-found', ['%nick%' => $nick]);
+        return false;
     }
 
     /**
      * Authenticate the user using the cookie.
      *
-     * @param User $user0
+     * @param User $user
      *
-     * @return User|false
+     * @return User|bool
      */
-    private function cookieAuth(&$user0)
+    private function cookieAuth(User &$user)
     {
         $cookieNick = $this->request->cookies->get('fsNick', '');
-        if ($cookieNick !== '') {
-            $cookieUser = $user0->get($cookieNick);
-            if ($cookieUser) {
-                if ($cookieUser->verifyLogkey($this->request->cookies->get('fsLogkey'))) {
-                    $this->miniLog->debug($this->i18n->trans('login-ok', ['%nick%' => $cookieNick]));
-
-                    return $cookieUser;
-                }
-
-                $this->miniLog->alert($this->i18n->trans('login-cookie-fail'));
-                $this->response->headers->clearCookie('fsNick');
-
-                return false;
-            }
-
-            $this->miniLog->alert($this->i18n->trans('login-user-not-found'));
+        if ($cookieNick === '') {
+            return false;
         }
 
+        if ($user->loadFromCode($cookieNick) && $user->enabled) {
+            if ($user->verifyLogkey($this->request->cookies->get('fsLogkey'))) {
+                $this->updateCookies($user);
+                $this->toolBox()->i18nLog()->debug('login-ok', ['%nick%' => $cookieNick]);
+                return $user;
+            }
+
+            $this->toolBox()->i18nLog()->warning('login-cookie-fail');
+            $this->response->headers->clearCookie('fsNick');
+            return false;
+        }
+
+        $this->toolBox()->i18nLog()->warning('login-user-not-found', ['%nick%' => $cookieNick]);
         return false;
+    }
+
+    /**
+     * Updates user cookies.
+     *
+     * @param User $user
+     * @param bool $force
+     */
+    private function updateCookies(User &$user, bool $force = false)
+    {
+        if ($force || \time() - \strtotime($user->lastactivity) > self::USER_UPDATE_ACTIVITY_PERIOD) {
+            $ipAddress = $this->toolBox()->ipFilter()->getClientIp();
+            if ($force) {
+                $user->newLogkey($ipAddress);
+            } else {
+                $user->updateActivity($ipAddress);
+            }
+
+            $user->save();
+
+            $expire = \time() + \FS_COOKIES_EXPIRE;
+            $this->response->headers->setCookie(new Cookie('fsNick', $user->nick, $expire));
+            $this->response->headers->setCookie(new Cookie('fsLogkey', $user->logkey, $expire));
+            $this->response->headers->setCookie(new Cookie('fsLang', $user->langcode, $expire));
+            $this->response->headers->setCookie(new Cookie('fsCompany', $user->idempresa, $expire));
+        }
     }
 
     /**
@@ -377,6 +344,6 @@ class AppController extends App
     {
         $this->response->headers->clearCookie('fsNick');
         $this->response->headers->clearCookie('fsLogkey');
-        $this->miniLog->debug($this->i18n->trans('logout-ok'));
+        $this->toolBox()->i18nLog()->debug('logout-ok');
     }
 }

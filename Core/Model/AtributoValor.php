@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2015-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2015-2018 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,17 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A Value for an article attribute.
@@ -29,14 +25,8 @@ use FacturaScripts\Core\Base\Utils;
  */
 class AtributoValor extends Base\ModelClass
 {
-    use Base\ModelTrait;
 
-    /**
-     * Primary key
-     *
-     * @var int
-     */
-    public $id;
+    use Base\ModelTrait;
 
     /**
      * Code of the related attribute.
@@ -46,6 +36,20 @@ class AtributoValor extends Base\ModelClass
     public $codatributo;
 
     /**
+     * Attribute name + value.
+     *
+     * @var string
+     */
+    public $descripcion;
+
+    /**
+     * Primary key
+     *
+     * @var int
+     */
+    public $id;
+
+    /**
      * Value of the attribute
      *
      * @var string
@@ -53,13 +57,16 @@ class AtributoValor extends Base\ModelClass
     public $valor;
 
     /**
-     * Returns the name of the table that uses this model.
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'atributos_valores';
+        new Atributo();
+        return parent::install();
     }
 
     /**
@@ -73,17 +80,13 @@ class AtributoValor extends Base\ModelClass
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function install()
+    public static function tableName()
     {
-        new Atributo();
-
-        return '';
+        return 'atributos_valores';
     }
 
     /**
@@ -93,23 +96,39 @@ class AtributoValor extends Base\ModelClass
      */
     public function test()
     {
-        $this->valor = Utils::noHtml($this->valor);
+        $this->valor = $this->toolBox()->utils()->noHtml($this->valor);
 
-        return true;
+        /// combine attribute name + value
+        $attribute = new Atributo();
+        if ($attribute->loadFromCode($this->codatributo)) {
+            $this->descripcion = $attribute->nombre . ' ' . $this->valor;
+        }
+
+        return parent::test();
     }
 
     /**
-     * Select all attributes of an attribute code
+     * 
+     * @param string $type
+     * @param string $list
      *
-     * @param string $cod
-     *
-     * @return self[]
+     * @return string
      */
-    public function allFromAtributo($cod)
+    public function url(string $type = 'auto', string $list = 'ListAtributo')
     {
-        $where = [new DataBaseWhere('codatributo', $cod)];
-        $order = ['valor' => 'ASC'];
+        $value = $this->codatributo;
+        switch ($type) {
+            case 'edit':
+                return is_null($value) ? 'EditAtributo' : 'EditAtributo?code=' . $value;
 
-        return $this->all($where, $order);
+            case 'list':
+                return $list;
+
+            case 'new':
+                return 'EditAtributo';
+        }
+
+        /// default
+        return empty($value) ? $list : 'EditAtributo?code=' . $value;
     }
 }

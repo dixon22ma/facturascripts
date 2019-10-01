@@ -12,10 +12,6 @@
         <null>NO</null>
     </column>
     <column>
-        <name>codagente</name>
-        <type>character varying(10)</type>
-    </column>
-    <column>
         <name>codalmacen</name>
         <type>character varying(4)</type>
     </column>
@@ -57,35 +53,34 @@
         <type>boolean</type>
     </column>
     <column>
-        <name>idestado</name>
-        <type>integer</type>
-    </column>
-    <column>
         <name>fecha</name>
         <type>date</type>
         <null>NO</null>
-    </column>
-    <column>
-        <name>hora</name>
-        <type>time without time zone</type>
     </column>
     <column>
         <name>femail</name>
         <type>date</type>
     </column>
     <column>
+        <name>hora</name>
+        <type>time</type>
+    </column>
+    <column>
         <name>idasiento</name>
         <type>integer</type>
     </column>
     <column>
-        <name>idasientop</name>
+        <name>idempresa</name>
+        <type>integer</type>
+    </column>
+    <column>
+        <name>idestado</name>
         <type>integer</type>
     </column>
     <column>
         <name>idfactura</name>
         <type>serial</type>
         <null>NO</null>
-        <default>nextval('facturasprov_idfactura_seq'::regclass)</default>
     </column>
     <column>
         <name>idfacturarect</name>
@@ -98,6 +93,10 @@
     <column>
         <name>neto</name>
         <type>double precision</type>
+    </column>
+    <column>
+        <name>nick</name>
+        <type>character varying(50)</type>
     </column>
     <column>
         <name>nombre</name>
@@ -120,19 +119,11 @@
     <column>
         <name>pagada</name>
         <type>boolean</type>
-        <null>NO</null>
-        <default>false</default>
-    </column>
-    <column>
-        <name>anulada</name>
-        <type>boolean</type>
-        <null>NO</null>
         <default>false</default>
     </column>
     <column>
         <name>tasaconv</name>
         <type>double precision</type>
-        <null>NO</null>
     </column>
     <column>
         <name>total</name>
@@ -154,32 +145,40 @@
         <name>totalrecargo</name>
         <type>double precision</type>
     </column>
-    <column>
-        <name>idempresa</name>
-        <type>integer</type>
-    </column>
-    <constraint>
-        <name>ca_facturasprov_series2</name>
-        <type>FOREIGN KEY (codserie) REFERENCES series (codserie) ON DELETE RESTRICT ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>ca_facturasprov_ejercicios2</name>
-        <type>FOREIGN KEY (codejercicio) REFERENCES ejercicios (codejercicio) ON DELETE RESTRICT ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>ca_facturasprov_asiento2</name>
-        <type>FOREIGN KEY (idasiento) REFERENCES co_asientos (idasiento) ON DELETE SET NULL ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>ca_facturasprov_asientop</name>
-        <type>FOREIGN KEY (idasientop) REFERENCES co_asientos (idasiento) ON DELETE SET NULL ON UPDATE CASCADE</type>
-    </constraint>
-    <constraint>
-        <name>uniq_codigo_facturasprov</name>
-        <type>UNIQUE (codigo)</type>
-    </constraint>
     <constraint>
         <name>facturasprov_pkey</name>
         <type>PRIMARY KEY (idfactura)</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_almacenes</name>
+        <type>FOREIGN KEY (codalmacen) REFERENCES almacenes (codalmacen) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_asiento</name>
+        <type>FOREIGN KEY (idasiento) REFERENCES asientos (idasiento) ON DELETE SET NULL ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_ejercicios</name>
+        <type>FOREIGN KEY (codejercicio) REFERENCES ejercicios (codejercicio) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_empresas</name>
+        <type>FOREIGN KEY (idempresa) REFERENCES empresas (idempresa) ON DELETE CASCADE ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_proveedores</name>
+        <type>FOREIGN KEY (codproveedor) REFERENCES proveedores (codproveedor) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_series</name>
+        <type>FOREIGN KEY (codserie) REFERENCES series (codserie) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_facturasprov_users</name>
+        <type>FOREIGN KEY (nick) REFERENCES users (nick) ON DELETE SET NULL ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>uniq_codigo_facturasprov</name>
+        <type>UNIQUE (codigo,idempresa)</type>
     </constraint>
 </table>

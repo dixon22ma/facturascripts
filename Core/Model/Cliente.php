@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,11 +10,11 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
@@ -31,7 +31,7 @@ class Cliente extends Base\ComercialContact
     use Base\ModelTrait;
 
     /**
-     * Employee assigned to this customer. Agent model.
+     * Agent assigned to this customer. Agent model.
      *
      * @var string
      */
@@ -45,11 +45,10 @@ class Cliente extends Base\ComercialContact
     public $codgrupo;
 
     /**
-     * True -> equivalence surcharge is applied to the client.
      *
-     * @var boolean
+     * @var string
      */
-    public $recargo;
+    public $codtarifa;
 
     /**
      * Preferred payment days when calculating the due date of invoices.
@@ -60,13 +59,109 @@ class Cliente extends Base\ComercialContact
     public $diaspago;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Default contact for the shipment of products
+     *
+     * @var integer
+     */
+    public $idcontactoenv;
+
+    /**
+     * Default contact for sending documentation
+     *
+     * @var integer
+     */
+    public $idcontactofact;
+
+    /**
+     *
+     * @var float
+     */
+    public $riesgoalcanzado;
+
+    /**
+     *
+     * @var float
+     */
+    public $riesgomax;
+
+    /**
+     *
+     * @param string $query
+     * @param string $fieldcode
+     *
+     * @return CodeModel[]
+     */
+    public function codeModelSearch(string $query, string $fieldcode = '')
+    {
+        $field = empty($fieldcode) ? $this->primaryColumn() : $fieldcode;
+        $fields = 'cifnif|codcliente|email|nombre|observaciones|razonsocial|telefono1|telefono2';
+        $where = [new DataBaseWhere($fields, mb_strtolower($query, 'UTF8'), 'LIKE')];
+        return CodeModel::all($this->tableName(), $field, $this->primaryDescriptionColumn(), false, $where);
+    }
+
+    /**
+     * Returns an array with the addresses associated with the client.
+     *
+     * @return Contacto[]
+     */
+    public function getAdresses()
+    {
+        $contactModel = new Contacto();
+        return $contactModel->all([new DataBaseWhere('codcliente', $this->codcliente)]);
+    }
+
+    /**
+     * Return the default billing or shipping address.
+     *
+     * @return Contacto
+     */
+    public function getDefaultAddress($type = 'billing')
+    {
+        $contact = new Contacto();
+        switch ($type) {
+            case 'shipping':
+                $contact->loadFromCode($this->idcontactoenv);
+                break;
+
+            default:
+                $contact->loadFromCode($this->idcontactofact);
+                break;
+        }
+
+        return $contact;
+    }
+
+    /**
+     * Returns the preferred payment days for this customer.
+     * 
+     * @return array
+     */
+    public function getPaymentDays()
+    {
+        $days = [];
+        foreach (explode(',', $this->diaspago . ',') as $str) {
+            if (is_numeric(trim($str))) {
+                $days[] = trim($str);
+            }
+        }
+
+        return $days;
+    }
+
+    /**
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'clientes';
+        /// we need exits Contacto before, but we can't check it because it would create a cyclic check
+        /// we need to check model GrupoClientes before
+        new GrupoClientes();
+
+        return parent::install();
     }
 
     /**
@@ -90,39 +185,13 @@ class Cliente extends Base\ComercialContact
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function install()
+    public static function tableName()
     {
-        /// we need to check model GrupoClientes before
-        new GrupoClientes();
-
-        return '';
-    }
-
-    /**
-     * Reset the values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->recargo = false;
-    }
-
-    /**
-     * Returns an array with the addresses associated with the client.
-     *
-     * @return DireccionCliente[]
-     */
-    public function getDirecciones()
-    {
-        $dirModel = new DireccionCliente();
-
-        return $dirModel->all([new DataBaseWhere('codcliente', $this->codcliente)]);
+        return 'clientes';
     }
 
     /**
@@ -132,21 +201,58 @@ class Cliente extends Base\ComercialContact
      */
     public function test()
     {
-        parent::test();
-        $this->codcliente = empty($this->codcliente) ? (string) $this->newCode() : trim($this->codcliente);
+        if (!empty($this->codcliente) && !preg_match('/^[A-Z0-9_\+\.\-]{1,10}$/i', $this->codcliente)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codcliente, '%column%' => 'codcliente', '%min%' => '1', '%max%' => '10']
+            );
+            return false;
+        }
 
         /// we validate the days of payment
         $arrayDias = [];
-        foreach (str_getcsv($this->diaspago) as $d) {
-            if ((int) $d >= 1 && (int) $d <= 31) {
-                $arrayDias[] = (int) $d;
+        foreach (str_getcsv($this->diaspago) as $day) {
+            if ((int) $day >= 1 && (int) $day <= 31) {
+                $arrayDias[] = (int) $day;
             }
         }
-        $this->diaspago = null;
-        if (!empty($arrayDias)) {
-            $this->diaspago = implode(',', $arrayDias);
+        $this->diaspago = empty($arrayDias) ? null : implode(',', $arrayDias);
+        return parent::test();
+    }
+
+    /**
+     *
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codcliente)) {
+            $this->codcliente = (string) $this->newCode();
         }
 
-        return true;
+        $return = parent::saveInsert($values);
+        if ($return && empty($this->idcontactofact)) {
+            /// creates new contact
+            $contact = new Contacto();
+            $contact->cifnif = $this->cifnif;
+            $contact->codcliente = $this->codcliente;
+            $contact->descripcion = $this->nombre;
+            $contact->email = $this->email;
+            $contact->empresa = $this->razonsocial;
+            $contact->fax = $this->fax;
+            $contact->nombre = $this->nombre;
+            $contact->personafisica = $this->personafisica;
+            $contact->telefono1 = $this->telefono1;
+            $contact->telefono2 = $this->telefono2;
+            if ($contact->save()) {
+                $this->idcontactoenv = $contact->idcontacto;
+                $this->idcontactofact = $contact->idcontacto;
+                return $this->save();
+            }
+        }
+
+        return $return;
     }
 }

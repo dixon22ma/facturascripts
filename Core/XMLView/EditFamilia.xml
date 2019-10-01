@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,36 +10,46 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * Initial description for the controller EditFamilia
- *
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
 -->
-
 <view>
     <columns>
         <group name="data" numcolumns="12">
-            <column name="code" numcolumns="2" order="100"
-                    description="desc-family-code">
-                <widget type="text" fieldname="codfamilia" onclick="" icon="fa-object-group" required="true" />
+            <column name="code" numcolumns="2" order="100">
+                <widget type="text" fieldname="codfamilia" icon="fas fa-hashtag" maxlength="8" required="true" />
             </column>
-            
             <column name="description" numcolumns="6" order="110">
                 <widget type="text" fieldname="descripcion" required="true" />
             </column>
-            
-            <column name="parent" numcolumns="4" order="120" description="desc-parent-family">
-                <widget type="select" fieldname="madre" required="true">
+            <column name="parent" description="desc-parent-family" numcolumns="4" order="120">
+                <widget type="select" fieldname="madre" onclick="EditFamilia">
                     <values source="familias" fieldcode="codfamilia" fieldtitle="descripcion"></values>
+                </widget>
+            </column>
+        </group>
+        <group name="accounts" numcolumns="12">
+            <column name="codsubcuentacom" title="subaccount-purchases" display="none" order="100">
+                <widget type="autocomplete" fieldname="codsubcuentacom">
+                    <values source="subcuentas" fieldcode="codsubcuenta" fieldtitle="descripcion"></values>
+                </widget>
+            </column>
+            <column name="codsubcuentaven" title="subaccount-sales" display="none" order="110">
+                <widget type="autocomplete" fieldname="codsubcuentaven">
+                    <values source="subcuentas" fieldcode="codsubcuenta" fieldtitle="descripcion"></values>
+                </widget>
+            </column>
+            <column name="codsubcuentairpcomf" title="subaccount-irpf" display="none" order="120">
+                <widget type="autocomplete" fieldname="codsubcuentairpfcom">
+                    <values source="subcuentas" fieldcode="codsubcuenta" fieldtitle="descripcion"></values>
                 </widget>
             </column>
         </group>
     </columns>
 </view>
-

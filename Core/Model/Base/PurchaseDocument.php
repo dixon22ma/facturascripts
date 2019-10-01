@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,23 +10,24 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model\Base;
 
-use FacturaScripts\Core\Base\Utils;
-use FacturaScripts\Core\Model\Proveedor;
+use FacturaScripts\Dinamic\Model\Divisa;
+use FacturaScripts\Dinamic\Model\Proveedor;
+use FacturaScripts\Dinamic\Model\User;
 
 /**
  * Description of PurchaseDocument
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
-abstract class PurchaseDocument extends BusinessDocument
+abstract class PurchaseDocument extends TransformerDocument
 {
 
     /**
@@ -51,16 +52,96 @@ abstract class PurchaseDocument extends BusinessDocument
      */
     public $numproveedor;
 
+    public function clear()
+    {
+        parent::clear();
+
+        /// select default currency
+        $divisa = new Divisa();
+        if ($divisa->loadFromCode($this->toolBox()->appSettings()->get('default', 'coddivisa'))) {
+            $this->coddivisa = $divisa->coddivisa;
+            $this->tasaconv = $divisa->tasaconvcompra;
+        }
+    }
+
+    /**
+     * 
+     * @return Proveedor
+     */
+    public function getSubject()
+    {
+        $proveedor = new Proveedor();
+        $proveedor->loadFromCode($this->codproveedor);
+        return $proveedor;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public function install()
+    {
+        /// we need to call parent first
+        $result = parent::install();
+
+        /// needed dependencies
+        new Proveedor();
+
+        return $result;
+    }
+
+    /**
+     * Sets the author for this document.
+     * 
+     * @param User $author
+     *
+     * @return bool
+     */
+    public function setAuthor($author)
+    {
+        if (!isset($author->nick)) {
+            return false;
+        }
+
+        $this->codalmacen = $author->codalmacen ?? $this->codalmacen;
+        $this->idempresa = $author->idempresa ?? $this->idempresa;
+        $this->nick = $author->nick;
+        return true;
+    }
+
     /**
      * Assign the supplier to the document.
+     * 
+     * @param Proveedor $subject
      *
-     * @param Proveedor $proveedor
+     * @return bool
      */
-    public function setProveedor($proveedor)
+    public function setSubject($subject)
     {
-        $this->codproveedor = $proveedor->codproveedor;
-        $this->nombre = $proveedor->razonsocial;
-        $this->cifnif = $proveedor->cifnif;
+        if (!isset($subject->codproveedor)) {
+            return false;
+        }
+
+        /// supplier model
+        $this->codproveedor = $subject->codproveedor;
+        $this->nombre = $subject->razonsocial;
+        $this->cifnif = $subject->cifnif;
+
+        /// commercial data
+        $this->codpago = $subject->codpago ?? $this->codpago;
+        $this->codserie = $subject->codserie ?? $this->codserie;
+        $this->irpf = $subject->irpf() ?? $this->irpf;
+
+        return true;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public function subjectColumn()
+    {
+        return 'codproveedor';
     }
 
     /**
@@ -70,9 +151,39 @@ abstract class PurchaseDocument extends BusinessDocument
      */
     public function test()
     {
-        $this->nombre = Utils::noHtml($this->nombre);
-        $this->numproveedor = Utils::noHtml($this->numproveedor);
+        $utils = $this->toolBox()->utils();
+        $this->nombre = $utils->noHtml($this->nombre);
+        $this->numproveedor = $utils->noHtml($this->numproveedor);
 
         return parent::test();
+    }
+
+    /**
+     * Updates subjects data in this document.
+     *
+     * @return bool
+     */
+    public function updateSubject()
+    {
+        if (empty($this->codproveedor)) {
+            return false;
+        }
+
+        $proveedor = new Proveedor();
+        if (!$proveedor->loadFromCode($this->codproveedor)) {
+            return false;
+        }
+
+        return $this->setSubject($proveedor);
+    }
+
+    /**
+     * 
+     * @param array $fields
+     */
+    protected function setPreviousData(array $fields = [])
+    {
+        $more = ['codproveedor'];
+        parent::setPreviousData(array_merge($more, $fields));
     }
 }

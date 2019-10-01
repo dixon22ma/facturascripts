@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,15 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * The agent/employee is the one associated with a delivery note, invoice o box.
@@ -26,26 +24,12 @@ use FacturaScripts\Core\Base\Utils;
  * can be associated with several user of none at all.
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Artex Trading sa    <jcuello@artextrading.com>
  */
 class Agente extends Base\Contact
 {
 
     use Base\ModelTrait;
-
-    /**
-     * Last name of the agent or employee.
-     *
-     * @var string
-     */
-    public $apellidos;
-
-    /**
-     * Bank account.
-     *
-     * @var string
-     */
-    public $banco;
 
     /**
      * Position in the company.
@@ -55,46 +39,18 @@ class Agente extends Base\Contact
     public $cargo;
 
     /**
-     * Contact city.
-     *
-     * @var string
-     */
-    public $ciudad;
-
-    /**
      * Primary key. Varchar (10).
      *
-     * @var int
+     * @var string
      */
     public $codagente;
 
     /**
-     * Contact country.
-     *
-     * @var string
-     */
-    public $codpais;
-
-    /**
-     * Postal code of the contact.
-     *
-     * @var string
-     */
-    public $codpostal;
-
-    /**
-     * True -> the customer no longer buys us or we do not want anything with him.
+     * True -> the agent no longer buys us or we do not want anything with him.
      *
      * @var boolean
      */
     public $debaja;
-
-    /**
-     * Address of the contact.
-     *
-     * @var string
-     */
-    public $direccion;
 
     /**
      * Date of withdrawal from the company.
@@ -104,41 +60,56 @@ class Agente extends Base\Contact
     public $fechabaja;
 
     /**
-     * Birthdate.
+     * Default contact data
      *
-     * @var string
+     * @var integer
      */
-    public $fechanacimiento;
+    public $idcontacto;
 
     /**
-     * Percentage of the agent's commission. It is used in budgets, orders, delivery notes and invoices.
+     * Link to product model for settle commission
      *
-     * @var float|int
+     * @var int
      */
-    public $porcomision;
+    public $idproducto;
 
     /**
-     * Contact province.
+     * Returns the addresses associated with the provider.
      *
-     * @var string
+     * @return Contacto
      */
-    public $provincia;
+    public function getContact()
+    {
+        $contact = new Contacto();
+        $contact->loadFromCode($this->idcontacto);
+        return $contact;
+    }
 
     /**
-     * Social security number.
-     *
-     * @var string
+     * Returns settlement product.
+     * 
+     * @return Producto
      */
-    public $seg_social;
+    public function getProduct()
+    {
+        $product = new Producto();
+        $product->loadFromCode($this->idproducto);
+        return $product;
+    }
 
     /**
-     * Returns the name of the table that uses this model.
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'agentes';
+        /// needed dependencies
+        new Producto();
+
+        return parent::install();
     }
 
     /**
@@ -162,22 +133,13 @@ class Agente extends Base\Contact
     }
 
     /**
-     * Returns name + agent's last name.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function primaryDescription()
+    public static function tableName()
     {
-        return $this->nombre . ' ' . $this->apellidos;
-    }
-
-    /**
-     * Reset values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->porcomision = 0.00;
+        return 'agentes';
     }
 
     /**
@@ -187,20 +149,50 @@ class Agente extends Base\Contact
      */
     public function test()
     {
-        parent::test();
-        $this->apellidos = Utils::noHtml($this->apellidos);
-        $this->banco = Utils::noHtml($this->banco);
-        $this->cargo = Utils::noHtml($this->cargo);
-        $this->ciudad = Utils::noHtml($this->ciudad);
-        $this->codpostal = Utils::noHtml($this->codpostal);
-        $this->direccion = Utils::noHtml($this->direccion);
-        $this->provincia = Utils::noHtml($this->provincia);
-        $this->seg_social = Utils::noHtml($this->seg_social);
+        $this->cargo = $this->toolBox()->utils()->noHtml($this->cargo);
 
-        if (empty($this->codagente)) {
-            $this->codagente = $this->newCode();
+        if (!empty($this->codagente) && !preg_match('/^[A-Z0-9_\+\.\-]{1,10}$/i', $this->codagente)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codagente, '%column%' => 'codagente', '%min%' => '1', '%max%' => '10']
+            );
+            return false;
         }
 
-        return true;
+        $this->debaja = !empty($this->fechabaja);
+        return parent::test();
+    }
+
+    /**
+     *
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codagente)) {
+            $this->codagente = (string) $this->newCode();
+        }
+
+        if (parent::saveInsert($values)) {
+            /// creates new contact
+            $contact = new Contacto();
+            $contact->cifnif = $this->cifnif;
+            $contact->codagente = $this->codagente;
+            $contact->descripcion = $this->nombre;
+            $contact->email = $this->email;
+            $contact->nombre = $this->nombre;
+            $contact->telefono1 = $this->telefono1;
+            $contact->telefono2 = $this->telefono2;
+            if ($contact->save()) {
+                $this->idcontacto = $contact->idcontacto;
+                return $this->save();
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }

@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,25 +10,27 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Core\Lib\ExtendedController\ListController;
+use FacturaScripts\Core\Model\Ejercicio;
 
 /**
  * Controller to list the items in the Ejercicio model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
-class ListEjercicio extends ExtendedController\ListController
+class ListEjercicio extends ListController
 {
+
     /**
      * Returns basic page attributes
      *
@@ -36,12 +38,11 @@ class ListEjercicio extends ExtendedController\ListController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'exercises';
-        $pagedata['icon'] = 'fa-calendar';
-        $pagedata['menu'] = 'accounting';
-
-        return $pagedata;
+        $data = parent::getPageData();
+        $data['menu'] = 'accounting';
+        $data['title'] = 'exercises';
+        $data['icon'] = 'fas fa-calendar-alt';
+        return $data;
     }
 
     /**
@@ -49,14 +50,23 @@ class ListEjercicio extends ExtendedController\ListController
      */
     protected function createViews()
     {
-        $className = $this->getClassName();
-        $this->addView('\FacturaScripts\Dinamic\Model\Ejercicio', $className);
-        $this->addSearchFields($className, ['nombre', 'codejercicio']);
+        $viewName = 'ListEjercicio';
+        $this->addView($viewName, 'Ejercicio', 'exercises', 'fas fa-calendar-alt');
+        $this->addSearchFields($viewName, ['nombre', 'codejercicio']);
+        $this->addOrderBy($viewName, ['fechainicio'], 'start-date', 2);
+        $this->addOrderBy($viewName, ['codejercicio'], 'code');
+        $this->addOrderBy($viewName, ['nombre'], 'name');
+        $this->addOrderBy($viewName, ['idempresa, codejercicio'], 'company');
 
-        $this->addOrderBy($className, 'fechainicio', 'start-date', 2);
-        $this->addOrderBy($className, 'codejercicio', 'code');
-        $this->addOrderBy($className, 'nombre', 'name');
+        /// filters
+        $selectValues = $this->codeModel->all('empresas', 'idempresa', 'nombre');
+        $this->addFilterSelect($viewName, 'idempresa', 'company', 'idempresa', $selectValues);
 
-        $this->addFilterSelect($className, 'estado', 'ejercicios');
+        $values = [
+            ['label' => $this->toolBox()->i18n()->trans('all'), 'where' => []],
+            ['label' => $this->toolBox()->i18n()->trans('only-active'), 'where' => [new DataBaseWhere('estado', Ejercicio::EXERCISE_STATUS_OPEN)]],
+            ['label' => $this->toolBox()->i18n()->trans('only-closed'), 'where' => [new DataBaseWhere('estado', Ejercicio::EXERCISE_STATUS_CLOSED)]],
+        ];
+        $this->addFilterSelectWhere($viewName, 'status', $values);
     }
 }

@@ -7,6 +7,12 @@
 -->
 <table>
     <column>
+        <name>actualizastock</name>
+        <type>integer</type>
+        <null>NO</null>
+        <default>1</default>
+    </column>
+    <column>
         <name>cantidad</name>
         <type>double precision</type>
         <null>NO</null>
@@ -14,32 +20,19 @@
     <column>
         <name>codimpuesto</name>
         <type>character varying(10)</type>
-        <null>YES</null>
     </column>
     <column>
         <name>codsubcuenta</name>
         <type>character varying(15)</type>
-        <null>YES</null>
     </column>
     <column>
         <name>descripcion</name>
         <type>text</type>
-        <null>YES</null>
-    </column>
-    <column>
-        <name>dtolineal</name>
-        <type>double precision</type>
-        <default>0</default>
     </column>
     <column>
         <name>dtopor</name>
         <type>double precision</type>
         <null>NO</null>
-    </column>
-    <column>
-        <name>idalbaran</name>
-        <type>integer</type>
-        <null>YES</null>
     </column>
     <column>
         <name>idfactura</name>
@@ -50,26 +43,24 @@
         <name>idlinea</name>
         <type>serial</type>
         <null>NO</null>
-        <default>nextval('lineasfacturasprov_idlinea_seq'::regclass)</default>
     </column>
     <column>
-        <name>idlineaalbaran</name>
+        <name>idproducto</name>
         <type>integer</type>
-    </column>
-    <column>
-        <name>idsubcuenta</name>
-        <type>integer</type>
-        <null>YES</null>
     </column>
     <column>
         <name>irpf</name>
         <type>double precision</type>
-        <null>YES</null>
     </column>
     <column>
         <name>iva</name>
         <type>double precision</type>
         <null>NO</null>
+    </column>
+    <column>
+        <name>orden</name>
+        <type>integer</type>
+        <default>0</default>
     </column>
     <column>
         <name>pvpsindto</name>
@@ -79,7 +70,7 @@
     <column>
         <name>pvptotal</name>
         <type>double precision</type>
-        <null>YES</null>
+        <null>NO</null>
     </column>
     <column>
         <name>pvpunitario</name>
@@ -89,24 +80,32 @@
     <column>
         <name>recargo</name>
         <type>double precision</type>
-        <null>YES</null>
+        <null>NO</null>
     </column>
     <column>
         <name>referencia</name>
         <type>character varying(30)</type>
     </column>
     <column>
-        <name>codcombinacion</name>
-        <type>character varying(18)</type>
+        <name>servido</name>
+        <type>double precision</type>
+        <null>NO</null>
+        <default>0</default>
     </column>
-    <constraint>
-        <name>ca_linea_facturasprov2</name>
-        <type>FOREIGN KEY (idfactura)
-            REFERENCES facturasprov (idfactura)
-            ON DELETE CASCADE ON UPDATE CASCADE</type>
-    </constraint>
     <constraint>
         <name>lineasfacturasprov_pkey</name>
         <type>PRIMARY KEY (idlinea)</type>
+    </constraint>
+    <constraint>
+        <name>ca_linea_facturasprov2</name>
+        <type>FOREIGN KEY (idfactura) REFERENCES facturasprov (idfactura) ON DELETE CASCADE ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_lineasfacturasprov_impuestos</name>
+        <type>FOREIGN KEY (codimpuesto) REFERENCES impuestos (codimpuesto) ON DELETE RESTRICT ON UPDATE CASCADE</type>
+    </constraint>
+    <constraint>
+        <name>ca_lineasfacturasprov_productos</name>
+        <type>FOREIGN KEY (idproducto) REFERENCES productos (idproducto) ON DELETE SET NULL ON UPDATE CASCADE</type>
     </constraint>
 </table>

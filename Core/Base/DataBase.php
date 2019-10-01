@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2015-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2015-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,33 +10,28 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Base;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseEngine;
-use FacturaScripts\Core\Base\DataBase\Mysql;
-use FacturaScripts\Core\Base\DataBase\Postgresql;
+use FacturaScripts\Core\Base\DataBase\MysqlEngine;
+use FacturaScripts\Core\Base\DataBase\PostgresqlEngine;
 
 /**
  * Generic class of access to the database, either MySQL or PostgreSQL.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class DataBase
 {
-    /**
-     * The link with de database.
-     *
-     * @var resource
-     */
-    private static $link;
+
+    const CHANNEL = 'database';
 
     /**
      * Link to the database engine selected in the configuration.
@@ -44,6 +39,13 @@ class DataBase
      * @var DataBaseEngine
      */
     private static $engine;
+
+    /**
+     * The link with de database.
+     *
+     * @var resource
+     */
+    private static $link;
 
     /**
      * Manage the log of all controllers, models and database.
@@ -57,7 +59,7 @@ class DataBase
      *
      * @var array
      */
-    private static $tables;
+    private static $tables = [];
 
     /**
      * DataBase constructor and prepare the class to use it.
@@ -65,25 +67,204 @@ class DataBase
     public function __construct()
     {
         if (self::$link === null) {
-            self::$miniLog = new MiniLog();
-            self::$tables = [];
+            self::$miniLog = new MiniLog(self::CHANNEL);
 
-            switch (strtolower(FS_DB_TYPE)) {
-                case 'mysql':
-                    self::$engine = new Mysql();
-                    break;
-
+            switch (strtolower(\FS_DB_TYPE)) {
                 case 'postgresql':
-                    self::$engine = new Postgresql();
+                    self::$engine = new PostgresqlEngine();
                     break;
 
                 default:
-                    self::$engine = null;
-                    $i18n = new Translator();
-                    self::$miniLog->critical($i18n->trans('db-type-not-recognized'));
+                    self::$engine = new MysqlEngine();
                     break;
             }
         }
+    }
+
+    /**
+     * Start a transaction in the database.
+     *
+     * @return bool
+     */
+    public function beginTransaction()
+    {
+        if ($this->inTransaction()) {
+            return true;
+        }
+
+        self::$miniLog->debug('Begin Transaction');
+        return self::$engine->beginTransaction(self::$link);
+    }
+
+    /**
+     * Disconnect from the database.
+     *
+     * @return bool
+     */
+    public function close(): bool
+    {
+        if (!$this->connected()) {
+            return true;
+        }
+
+        if (self::$engine->inTransaction(self::$link) && !$this->rollback()) {
+            return false;
+        }
+
+        if (self::$engine->close(self::$link)) {
+            self::$link = null;
+        }
+
+        return !$this->connected();
+    }
+
+    /**
+     * Record the statements executed in the database.
+     *
+     * @return bool
+     */
+    public function commit()
+    {
+        $result = self::$engine->commit(self::$link);
+        if ($result) {
+            self::$miniLog->debug('Commit Transaction');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Connect to the database.
+     *
+     * @return bool
+     */
+    public function connect(): bool
+    {
+        if ($this->connected()) {
+            return true;
+        }
+
+        $error = '';
+        self::$link = self::$engine->connect($error);
+
+        if ($error !== '') {
+            self::$miniLog->critical($error);
+        }
+
+        return $this->connected();
+    }
+
+    /**
+     * Returns True if it is connected to the database.
+     *
+     * @return bool
+     */
+    public function connected(): bool
+    {
+        return (bool) self::$link;
+    }
+
+    /**
+     * Escape the quotes from the column name.
+     * 
+     * @param string $name
+     *
+     * @return string
+     */
+    public function escapeColumn($name)
+    {
+        return self::$engine->escapeColumn(self::$link, $name);
+    }
+
+    /**
+     * Escape the quotes from the text string.
+     *
+     * @param string $str
+     *
+     * @return string
+     */
+    public function escapeString($str)
+    {
+        return self::$engine->escapeString(self::$link, $str);
+    }
+
+    /**
+     * Execute SQL statements on the database (inserts, updates or deletes).
+     * To make selects, it is better to use select () or selecLimit ().
+     * If there is no open transaction, one starts, queries are executed
+     * If the transaction has opened it in the call, it closes it confirming
+     * or discarding according to whether it has gone well or has given an error
+     *
+     * @param string $sql
+     *
+     * @return bool
+     */
+    public function exec($sql)
+    {
+        $result = $this->connected();
+        if ($result) {
+            /// clean the list of tables, since there could be changes when executing this sql.
+            self::$tables = [];
+
+            $inTransaction = $this->inTransaction();
+            $this->beginTransaction();
+
+            /// adds the sql query to the history
+            self::$miniLog->debug($sql);
+
+            /// execute sql
+            $result = self::$engine->exec(self::$link, $sql);
+            if (!$result) {
+                self::$miniLog->error(self::$engine->errorMessage(self::$link));
+            }
+
+            if ($inTransaction) {
+                return $result;
+            }
+
+            /// We only operate if the transaction has been initiated in this call
+            if ($result) {
+                return $this->commit();
+            }
+
+            $this->rollback();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Returns an array with the columns of a given table.
+     *
+     * @param string $tableName
+     *
+     * @return array
+     */
+    public function getColumns($tableName)
+    {
+        $result = [];
+        $data = $this->select(self::$engine->getSQL()->sqlColumns($tableName));
+        foreach ($data as $row) {
+            $column = self::$engine->columnFromData($row);
+            $result[$column['name']] = $column;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Returns an array with the constraints of a table.
+     *
+     * @param string $tableName
+     * @param bool   $extended
+     *
+     * @return array
+     */
+    public function getConstraints($tableName, $extended = false)
+    {
+        $sql = $extended ? self::$engine->getSQL()->sqlConstraintsExtended($tableName) : self::$engine->getSQL()->sqlConstraints($tableName);
+        $data = $this->select($sql);
+        return $data ? array_values($data) : [];
     }
 
     /**
@@ -94,6 +275,24 @@ class DataBase
     public function getEngine()
     {
         return self::$engine;
+    }
+
+    /**
+     * Returns an array with the indices of a given table.
+     *
+     * @param string $tableName
+     *
+     * @return array
+     */
+    public function getIndexes($tableName)
+    {
+        $result = [];
+        $data = $this->select(self::$engine->getSQL()->sqlIndexes($tableName));
+        foreach ($data as $row) {
+            $result[] = ['name' => $row['Key_name']];
+        }
+
+        return $result;
     }
 
     /**
@@ -115,126 +314,11 @@ class DataBase
      */
     public function getTables()
     {
-        if (count(self::$tables) === 0) {
+        if (empty(self::$tables)) {
             self::$tables = self::$engine->listTables(self::$link);
         }
 
         return self::$tables;
-    }
-
-    /**
-     * Returns an array with the columns of a given table.
-     *
-     * @param string $tableName
-     *
-     * @return array
-     */
-    public function getColumns($tableName)
-    {
-        $result = [];
-        $data = $this->select(self::$engine->getSQL()->sqlColumns($tableName));
-        if (is_array($data) && !empty($data)) {
-            foreach ($data as $dataCol) {
-                $column = self::$engine->columnFromData($dataCol);
-                $result[$column['name']] = $column;
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Returns an array with the constraints of a table.
-     *
-     * @param string $tableName
-     * @param bool   $extended
-     *
-     * @return array
-     */
-    public function getConstraints($tableName, $extended = false)
-    {
-        if ($extended) {
-            $sql = self::$engine->getSQL()->sqlConstraintsExtended($tableName);
-        } else {
-            $sql = self::$engine->getSQL()->sqlConstraints($tableName);
-        }
-
-        $data = $this->select($sql);
-
-        return $data ? array_values($data) : [];
-    }
-
-    /**
-     * Returns an array with the indices of a given table.
-     *
-     * @param string $tableName
-     *
-     * @return array
-     */
-    public function getIndexes($tableName)
-    {
-        $result = [];
-        $data = $this->select(self::$engine->getSQL()->sqlIndexes($tableName));
-        if (is_array($data) && !empty($data)) {
-            foreach ($data as $row) {
-                $result[] = ['name' => $row['Key_name']];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Returns True if it is connected to the database.
-     *
-     * @return bool
-     */
-    public function connected()
-    {
-        return (bool) self::$link;
-    }
-
-    /**
-     * Connect to the database.
-     *
-     * @return bool
-     */
-    public function connect()
-    {
-        if ($this->connected()) {
-            return true;
-        }
-
-        $error = '';
-        self::$link = self::$engine->connect($error);
-
-        if ($error !== '') {
-            self::$miniLog->critical($error);
-        }
-
-        return $this->connected();
-    }
-
-    /**
-     * Disconnect from the database.
-     *
-     * @return bool
-     */
-    public function close()
-    {
-        if (!$this->connected()) {
-            return true;
-        }
-
-        if (self::$engine->inTransaction(self::$link) && !$this->rollback()) {
-            return false;
-        }
-
-        if (self::$engine->close(self::$link)) {
-            self::$link = null;
-        }
-
-        return !$this->connected();
     }
 
     /**
@@ -248,34 +332,14 @@ class DataBase
     }
 
     /**
-     * Start a transaction in the database.
+     * Returns the last ID assigned when doing an INSERT in the database.
      *
-     * @return bool
+     * @return int|bool
      */
-    public function beginTransaction()
+    public function lastval()
     {
-        $result = $this->inTransaction();
-        if (!$result) {
-            self::$miniLog->sql('Begin Transaction');
-            $result = self::$engine->beginTransaction(self::$link);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Record the statements executed in the database.
-     *
-     * @return bool
-     */
-    public function commit()
-    {
-        $result = self::$engine->commit(self::$link);
-        if ($result) {
-            self::$miniLog->sql('Commit Transaction');
-        }
-
-        return $result;
+        $aux = $this->select(self::$engine->getSQL()->sqlLastValue());
+        return empty($aux) ? false : $aux[0]['num'];
     }
 
     /**
@@ -285,9 +349,7 @@ class DataBase
      */
     public function rollback()
     {
-        self::$miniLog->error(self::$engine->errorMessage(self::$link));
-        self::$miniLog->sql('Rollback Transaction');
-
+        self::$miniLog->debug('Rollback Transaction');
         return self::$engine->rollback(self::$link);
     }
 
@@ -316,7 +378,7 @@ class DataBase
      *
      * @return array
      */
-    public function selectLimit($sql, $limit = FS_ITEM_LIMIT, $offset = 0)
+    public function selectLimit($sql, $limit = \FS_ITEM_LIMIT, $offset = 0)
     {
         if (!$this->connected()) {
             return [];
@@ -328,78 +390,19 @@ class DataBase
         }
 
         /// add the sql query to the history
-        self::$miniLog->sql($sql);
+        self::$miniLog->debug($sql);
         $result = self::$engine->select(self::$link, $sql);
-        if (empty($result)) {
-            self::$miniLog->critical(self::$engine->errorMessage(self::$link));
-
-            return [];
+        if (!empty($result)) {
+            return $result;
         }
 
-        return $result;
-    }
-
-    /**
-     * Execute SQL statements on the database (inserts, updates or deletes).
-     * To make selects, it is better to use select () or selecLimit ().
-     * If there is no open transaction, one starts, queries are executed
-     * If the transaction has opened it in the call, it closes it confirming
-     * or discarding according to whether it has gone well or has given an error
-     *
-     * @param string $sql
-     *
-     * @return bool
-     */
-    public function exec($sql)
-    {
-        $result = $this->connected();
-        if ($result) {
-            /// clean the list of tables, since there could be changes when executing this sql.
-            self::$tables = [];
-
-            $inTransaction = $this->inTransaction();
-            $this->beginTransaction();
-
-            /// add the sql query to the history
-            self::$miniLog->sql($sql);
-            $result = self::$engine->exec(self::$link, $sql);
-            if (!$inTransaction) {
-                /// We only operate if the transaction has been initiated in this call
-                if ($result) {
-                    $result = $this->commit();
-                } else {
-                    $this->rollback();
-                }
-            }
+        /// some error?
+        $error = self::$engine->errorMessage(self::$link);
+        if (!empty($error)) {
+            self::$miniLog->critical($error);
         }
 
-        return $result;
-    }
-
-    /**
-     * Returns the last ID assigned when doing an INSERT in the database.
-     *
-     * @return integer|bool
-     */
-    public function lastval()
-    {
-        $aux = $this->select(self::$engine->getSQL()->sqlLastValue());
-
-        return $aux ? $aux[0]['num'] : false;
-    }
-
-    /**
-     * Returns the used database engine and the version.
-     *
-     * @return string
-     */
-    public function version()
-    {
-        if (!$this->connected()) {
-            return '';
-        }
-
-        return self::$engine->version(self::$link);
+        return [];
     }
 
     /**
@@ -420,21 +423,13 @@ class DataBase
     }
 
     /**
-     * Make extra checks on the table.
-     *
+     * 
      * @param string $tableName
-     *
-     * @return bool
+     * @param array  $fields
      */
-    public function checkTableAux($tableName)
+    public function updateSequence($tableName, $fields)
     {
-        $error = '';
-        $result = self::$engine->checkTableAux(self::$link, $tableName, $error);
-        if (!$result) {
-            self::$miniLog->critical($error);
-        }
-
-        return $result;
+        self::$engine->updateSequence(self::$link, $tableName, $fields);
     }
 
     /**
@@ -451,61 +446,29 @@ class DataBase
         }
 
         if (is_bool($val)) {
-            if ($val) {
-                return 'TRUE';
-            }
-
-            return 'FALSE';
+            return $val ? 'TRUE' : 'FALSE';
         }
 
         /// If its a date
         if (preg_match("/^([\d]{1,2})-([\d]{1,2})-([\d]{4})$/i", $val)) {
-            return "'" . date($this->dateStyle(), strtotime($val)) . "'";
+            return "'" . date(self::$engine->dateStyle(), strtotime($val)) . "'";
         }
 
         /// It its a date time
         if (preg_match("/^([\d]{1,2})-([\d]{1,2})-([\d]{4}) ([\d]{1,2}):([\d]{1,2}):([\d]{1,2})$/i", $val)) {
-            return "'" . date($this->dateStyle() . ' H:i:s', strtotime($val)) . "'";
+            return "'" . date(self::$engine->dateStyle() . ' H:i:s', strtotime($val)) . "'";
         }
 
         return "'" . $this->escapeString($val) . "'";
     }
 
     /**
-     * Escape the quotes from the text string.
-     *
-     * @param string $str
+     * Returns the used database engine and the version.
      *
      * @return string
      */
-    public function escapeString($str)
+    public function version()
     {
-        if (self::$engine) {
-            $str = self::$engine->escapeString(self::$link, $str);
-        }
-
-        return $str;
-    }
-
-    /**
-     * Returns the date style of the database engine.
-     *
-     * @return string
-     */
-    public function dateStyle()
-    {
-        return self::$engine->dateStyle();
-    }
-
-    /**
-     * Returns the SQL needed to convert the column to integer.
-     *
-     * @param string $colName
-     *
-     * @return string
-     */
-    public function sql2Int($colName)
-    {
-        return self::$engine->getSQL()->sql2Int($colName);
+        return $this->connected() ? self::$engine->version(self::$link) : '';
     }
 }

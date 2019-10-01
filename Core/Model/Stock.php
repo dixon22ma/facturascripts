@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,15 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * The quantity in inventory of an item in a particular warehouse.
@@ -31,33 +30,7 @@ class Stock extends Base\ModelClass
 
     use Base\ModelTrait;
 
-    /**
-     * Primary key.
-     *
-     * @var int
-     */
-    public $idstock;
-
-    /**
-     * Warehouse code.
-     *
-     * @var string
-     */
-    public $codalmacen;
-
-    /**
-     * Reference.
-     *
-     * @var string
-     */
-    public $referencia;
-
-    /**
-     * Name.
-     *
-     * @var string
-     */
-    public $nombre;
+    const MAX_DECIMALS = 3;
 
     /**
      * Quantity.
@@ -67,32 +40,53 @@ class Stock extends Base\ModelClass
     public $cantidad;
 
     /**
-     * Reserved.
+     * Warehouse code.
      *
-     * @var float|int
+     * @var string
      */
-    public $reservada;
+    public $codalmacen;
 
     /**
-     * Available.
+     * Available. Is the quantity minus reserved.
      *
      * @var float|int
      */
     public $disponible;
 
     /**
-     * Pending receipt.
+     * Product identifier.
+     *
+     * @var int
+     */
+    public $idproducto;
+
+    /**
+     * Primary key.
+     *
+     * @var int
+     */
+    public $idstock;
+
+    /**
+     * Pending receipt. Merchandise pending receipt from the supplier.
      *
      * @var float|int
      */
     public $pterecibir;
 
     /**
-     * Minimum stock.
+     * Reference.
+     *
+     * @var string
+     */
+    public $referencia;
+
+    /**
+     * Reserved on customer orders.
      *
      * @var float|int
      */
-    public $stockmin;
+    public $reservada;
 
     /**
      * Maximum stock.
@@ -102,41 +96,56 @@ class Stock extends Base\ModelClass
     public $stockmax;
 
     /**
-     * Amount last regularization.
+     * Minimum stock.
      *
      * @var float|int
      */
-    public $cantidadultreg;
+    public $stockmin;
 
     /**
-     * Last regularization date.
-     *
-     * @var string
+     * Reset the values of all model properties.
      */
-    public $fechaultreg;
+    public function clear()
+    {
+        parent::clear();
+        $this->cantidad = 0.0;
+        $this->disponible = 0.0;
+        $this->pterecibir = 0.0;
+        $this->reservada = 0.0;
+        $this->stockmax = 0.0;
+        $this->stockmin = 0.0;
+    }
 
     /**
-     * Last regularization time.
-     *
-     * @var string
+     * 
+     * @return bool
      */
-    public $horaultreg;
+    public function delete()
+    {
+        if (parent::delete()) {
+            $this->cantidad = 0.0;
+            $this->updateProductoStock();
+            return true;
+        }
+
+        return false;
+    }
 
     /**
-     * Location.
-     *
-     * @var string
-     */
-    public $ubicacion;
-
-    /**
-     * Returns the name of the table that uses this model.
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'stocks';
+        /// needed dependencies
+        new Almacen();
+        new Producto();
+        new Variante();
+
+        return parent::install();
     }
 
     /**
@@ -150,95 +159,55 @@ class Stock extends Base\ModelClass
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
-     *
-     * @return string
+     * 
+     * @return boolean
      */
-    public function install()
+    public function save()
     {
-        new Almacen();
-        new Articulo();
-
-        return '';
-    }
-
-    /**
-     * Reset the values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->nombre = '';
-        $this->cantidad = 0;
-        $this->reservada = 0;
-        $this->disponible = 0;
-        $this->pterecibir = 0;
-        $this->stockmin = 0;
-        $this->stockmax = 0;
-        $this->cantidadultreg = 0;
-    }
-
-    /**
-     * Returns the name of the store.
-     *
-     * @return string
-     */
-    public function getNombre()
-    {
-        $almacenModel = new Almacen();
-        $almacen = $almacenModel->get($this->codalmacen);
-        if ($almacen) {
-            $this->nombre = $almacen->nombre;
-        }
-
-        return $this->nombre;
-    }
-
-    /**
-     * Assign the amount.
-     *
-     * @param int $cant
-     */
-    public function setCantidad($cant = 0)
-    {
-        $this->cantidad = (float) $cant;
-        $this->disponible = $this->cantidad - $this->reservada;
-    }
-
-    /**
-     * Add the amount.
-     *
-     * @param int $cant
-     */
-    public function sumCantidad($cant = 0)
-    {
-        /// convertimos a flot por si acaso nos ha llegado un string
-        $this->cantidad += (float) $cant;
-        $this->disponible = $this->cantidad - $this->reservada;
-    }
-
-    /**
-     * Returns the stock by reference and additionally by warehouse.
-     *
-     * @param string $ref
-     * @param bool   $codalmacen
-     *
-     * @return Stock|false
-     */
-    public function getByReferencia($ref, $codalmacen = false)
-    {
-        $where = [new DataBaseWhere('referencia', $ref)];
-        if ($codalmacen) {
-            $where[] = new DataBaseWhere('codalmacen', $codalmacen);
-        }
-
-        foreach ($this->all($where) as $stock) {
-            return $stock;
+        if (parent::save()) {
+            $this->updateProductoStock();
+            return true;
         }
 
         return false;
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'stocks';
+    }
+
+    /**
+     * Transfer $qty unities of stock to $toWarehouse
+     *
+     * @param string $toWarehouse destination warehouse
+     * @param float  $qty quantity to move
+     *
+     * @return bool
+     */
+    public function transferTo(string $toWarehouse, float $qty): bool
+    {
+        $destination = new Stock();
+        $where = [
+            new DataBaseWhere('codalmacen', $toWarehouse),
+            new DataBaseWhere('referencia', $this->referencia)
+        ];
+        if ($destination->loadFromCode('', $where)) {
+            $destination->cantidad += $qty;
+        } else {
+            $destination->codalmacen = $toWarehouse;
+            $destination->idproducto = $this->idproducto;
+            $destination->referencia = $this->referencia;
+            $destination->cantidad = $qty;
+        }
+
+        $this->cantidad -= $qty;
+        return ($destination->save() && $this->save());
     }
 
     /**
@@ -248,36 +217,84 @@ class Stock extends Base\ModelClass
      */
     public function test()
     {
-        $this->cantidad = round($this->cantidad, 3);
-        $this->reservada = round($this->reservada, 3);
-        $this->disponible = $this->cantidad - $this->reservada;
-        $this->ubicacion = Utils::noHtml($this->ubicacion);
+        $this->cantidad = round($this->cantidad, self::MAX_DECIMALS);
+        $this->referencia = $this->toolBox()->utils()->noHtml($this->referencia);
 
-        return true;
+        $this->reservada = round($this->reservada, self::MAX_DECIMALS);
+        if ($this->reservada < 0) {
+            $this->reservada = 0;
+        }
+
+        $this->pterecibir = round($this->pterecibir, self::MAX_DECIMALS);
+        if ($this->pterecibir < 0) {
+            $this->pterecibir = 0;
+        }
+
+        $this->disponible = $this->cantidad - $this->reservada;
+        return parent::test();
     }
 
     /**
-     * Returns the total stock by reference and additionally by warehouse.
-     *
-     * @param string $ref
-     * @param bool   $codalmacen
-     *
-     * @return float|int
+     * Returns the total stock of the product.
+     * 
+     * @param int    $idproducto
+     * @param string $referencia
+     * 
+     * @return float
      */
-    public function totalFromArticulo($ref, $codalmacen = false)
+    public function totalFromProducto(int $idproducto, string $referencia = '')
     {
         $sql = 'SELECT SUM(cantidad) AS total FROM ' . static::tableName()
-            . ' WHERE referencia = ' . self::$dataBase->var2str($ref);
+            . ' WHERE idproducto = ' . self::$dataBase->var2str($idproducto);
 
-        if ($codalmacen) {
-            $sql .= ' AND codalmacen = ' . self::$dataBase->var2str($codalmacen);
+        if (!empty($referencia)) {
+            $sql .= ' AND referencia = ' . self::$dataBase->var2str($referencia);
         }
 
         $data = self::$dataBase->select($sql);
-        if (!empty($data)) {
-            return round((float) $data[0]['total'], 3);
+        return empty($data) ? 0.0 : round((float) $data[0]['total'], self::MAX_DECIMALS);
+    }
+
+    /**
+     * Returns the url where to see / modify the data.
+     *
+     * @param string $type
+     * @param string $list
+     *
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'List')
+    {
+        switch ($type) {
+            case 'edit':
+                return is_null($this->idproducto) ? 'EditProducto' : 'EditProducto?code=' . $this->idproducto;
+
+            case 'list':
+                return $list . 'Producto';
+
+            case 'new':
+                return 'EditProducto';
         }
 
-        return 0;
+        /// default
+        return empty($this->idproducto) ? $list . 'Producto' : 'EditProducto?code=' . $this->idproducto;
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    protected function updateProductoStock()
+    {
+        $total = $this->totalFromProducto($this->idproducto);
+        $sql = "UPDATE " . Producto::tableName() . " SET stockfis = " . self::$dataBase->var2str($total)
+            . ", actualizado = " . self::$dataBase->var2str(date('d-m-Y H:i:s'))
+            . " WHERE idproducto = " . self::$dataBase->var2str($this->idproducto) . ';';
+
+        $totalVariant = $this->totalFromProducto($this->idproducto, $this->referencia);
+        $sql .= "UPDATE " . Variante::tableName() . " SET stockfis = " . self::$dataBase->var2str($totalVariant)
+            . " WHERE referencia = " . self::$dataBase->var2str($this->referencia) . ';';
+
+        return self::$dataBase->exec($sql);
     }
 }

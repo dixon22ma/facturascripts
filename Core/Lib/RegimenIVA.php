@@ -10,13 +10,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib;
 
 /**
@@ -26,15 +25,10 @@ namespace FacturaScripts\Core\Lib;
  */
 class RegimenIVA
 {
-    /**
-     * Returns the default value
-     *
-     * @return string
-     */
-    public static function defaultValue()
-    {
-        return 'General';
-    }
+
+    const TAX_SYSTEM_EXEMPT = 'Exento';
+    const TAX_SYSTEM_GENERAL = 'General';
+    const TAX_SYSTEM_SURCHARGE = 'Recargo';
 
     /**
      * Returns all the available options
@@ -43,6 +37,20 @@ class RegimenIVA
      */
     public static function all()
     {
-        return ['General', 'Exento'];
+        return [
+            self::TAX_SYSTEM_EXEMPT => 'Exento',
+            self::TAX_SYSTEM_GENERAL => 'General',
+            self::TAX_SYSTEM_SURCHARGE => 'Recargo de equivalencia'
+        ];
+    }
+
+    /**
+     * Returns the default value
+     *
+     * @return string
+     */
+    public static function defaultValue()
+    {
+        return self::TAX_SYSTEM_GENERAL;
     }
 }

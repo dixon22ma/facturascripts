@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,76 +10,158 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\BaseView;
+use FacturaScripts\Core\Lib\ExtendedController\ComercialContactController;
+use FacturaScripts\Dinamic\Model\TotalModel;
 
 /**
  * Controller to edit a single item from the Agente model
  *
+ * @author Carlos Garcia Gomez <carlos@facturascripts.com>
+ * @author Artex Trading sa    <jcuello@artextrading.com>
  * @author Raul
- *  Edit Agente class based upon Editcliente's functionality
  */
-class EditAgente extends ExtendedController\PanelController
+class EditAgente extends ComercialContactController
 {
-    /**
-     * Load Views
-     */
-    protected function createViews()
-    {
-        $this->addEditView('\FacturaScripts\Dinamic\Model\Agente', 'EditAgente', 'agent');
-        $this->addListView('\FacturaScripts\Dinamic\Model\FacturaCliente', 'EditAgenteFacturas', 'invoices', 'fa-files-o');
-        $this->addListView('\FacturaScripts\Dinamic\Model\AlbaranCliente', 'EditAgenteAlbaranes', 'delivery-notes', 'fa-files-o');
-        $this->addListView('\FacturaScripts\Dinamic\Model\PedidoCliente', 'EditAgentePedidos', 'orders', 'fa-files-o');
-        $this->addListView('\FacturaScripts\Dinamic\Model\PresupuestoCliente', 'EditAgentePresupuestos', 'estimations', 'fa-files-o');
-    }
 
     /**
-     * Load view data procedure
+     * Returns the sum of the agent's total outstanding invoices.
      *
-     * @param string                      $keyView
-     * @param ExtendedController\EditView $view
+     * @return string
      */
-    protected function loadData($keyView, $view)
+    public function calcAgentInvoicePending()
     {
-        switch ($keyView) {
-            case 'EditAgente':
-                $code = $this->request->get('code');
-                $view->loadData($code);
-                break;
+        $where = [
+            new DataBaseWhere('codagente', $this->getViewModelValue($this->getMainViewName(), 'codagente')),
+            new DataBaseWhere('pagada', false)
+        ];
 
-            case 'EditAgentePresupuestos':
-            case 'EditAgentePedidos':
-            case 'EditAgenteAlbaranes':
-            case 'EditAgenteFacturas':
-                $codagente = $this->getViewModelValue('EditAgente', 'codagente');
-                $where = [new DataBaseWhere('codagente', $codagente)];
-                $view->loadData(false, $where);
-                break;
-        }
+        $totalModel = TotalModel::all('facturascli', $where, ['total' => 'SUM(total)'], '')[0];
+        return $this->toolBox()->coins()->format($totalModel->totals['total'], 2);
     }
 
     /**
-     * Returns basic page attributes
+     * Returns the class name of the model to use.
+     *
+     * @return string
+     */
+    public function getModelClassName()
+    {
+        return 'Agente';
+    }
+
+    /**
+     * Returns basic page attributes.
      *
      * @return array
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'agent';
-        $pagedata['menu'] = 'admin';
-        $pagedata['icon'] = 'fa-id-badge';
-        $pagedata['showonmenu'] = false;
+        $data = parent::getPageData();
+        $data['menu'] = 'sales';
+        $data['title'] = 'agent';
+        $data['icon'] = 'fas fa-user-tie';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createCommissionsView($viewName = 'ListComision')
+    {
+        $this->addListView($viewName, 'Comision', 'commissions', 'fas fa-percentage');
+        $this->views[$viewName]->addOrderBy(['prioridad'], 'priority', 2);
+
+        /// disable columns
+        $this->views[$viewName]->disableColumn('agent', true);
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createContactView($viewName = 'EditContacto')
+    {
+        $this->addEditView($viewName, 'Contacto', 'contact', 'fa fa-address-book');
+
+        /// disable columns
+        $this->views[$viewName]->disableColumn('agent', true);
+        $this->views[$viewName]->disableColumn('company', true);
+        $this->views[$viewName]->disableColumn('fiscal-id', true);
+        $this->views[$viewName]->disableColumn('fiscal-number', true);
+        $this->views[$viewName]->disableColumn('position', true);
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createSettlementView($viewName = 'ListLiquidacionComision')
+    {
+        $this->addListView($viewName, 'LiquidacionComision', 'settlements', 'fas fa-chalkboard-teacher');
+    }
+
+    /**
+     * Load Views
+     */
+    protected function createViews()
+    {
+        parent::createViews();
+        $this->createContactView();
+        $this->createCommissionsView();
+        $this->createSettlementView();
+        $this->createCustomerListView('ListFacturaCliente', 'FacturaCliente', 'invoices');
+        $this->createCustomerListView('ListAlbaranCliente', 'AlbaranCliente', 'delivery-notes');
+        $this->createCustomerListView('ListPedidoCliente', 'PedidoCliente', 'orders');
+        $this->createCustomerListView('ListPresupuestoCliente', 'PresupuestoCliente', 'estimations');
+    }
+
+    /**
+     * Load view data procedure
+     *
+     * @param string   $viewName
+     * @param BaseView $view
+     */
+    protected function loadData($viewName, $view)
+    {
+        switch ($viewName) {
+            case 'EditContacto':
+            case 'ListAlbaranCliente':
+            case 'ListComision':
+            case 'ListFacturaCliente':
+            case 'ListLiquidacionComision':
+            case 'ListPedidoCliente':
+            case 'ListPresupuestoCliente':
+                $codagente = $this->getViewModelValue('EditAgente', 'codagente');
+                $where = [new DataBaseWhere('codagente', $codagente)];
+                $view->loadData('', $where);
+                break;
+
+            default:
+                parent::loadData($viewName, $view);
+                if (!$view->model->exists()) {
+                    $view->disableColumn('contact');
+                }
+                break;
+        }
+    }
+
+    /**
+     *
+     * @param string $viewName
+     */
+    protected function setCustomWidgetValues($viewName)
+    {
+        ;
     }
 }

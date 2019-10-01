@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,43 +10,150 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Base;
+
+use FacturaScripts\Core\App\AppSettings;
+use FacturaScripts\Dinamic\Model\Divisa;
 
 /**
  * DivisaTools give us some basic and common methods for currency numbers.
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
-class DivisaTools
+class DivisaTools extends NumberTools
 {
+
+    /**
+     *
+     * @var Divisa[]
+     */
+    private static $divisas;
+
+    /**
+     *
+     * @var Divisa
+     */
+    private static $selectedDivisa;
+
+    /**
+     * DivisaTools constructor.
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        if (!defined('FS_CURRENCY_POS')) {
+            define('FS_CURRENCY_POS', 'right');
+        }
+
+        if (!isset(self::$divisas)) {
+            $divisa = new Divisa();
+            self::$divisas = $divisa->all();
+
+            $coddivisa = AppSettings::get('default', 'coddivisa');
+            self::$selectedDivisa = static::get($coddivisa);
+        }
+    }
+
+    /**
+     * Convert the amount form currency1 to currency2.
+     *
+     * @param float  $amount
+     * @param string $coddivisa1
+     * @param string $coddivisa2
+     *
+     * @return float
+     */
+    public static function convert($amount, $coddivisa1, $coddivisa2)
+    {
+        if ($coddivisa1 != $coddivisa2) {
+            return (float) $amount / static::get($coddivisa1)->tasaconv * static::get($coddivisa2)->tasaconv;
+        }
+
+        return (float) $amount;
+    }
+
+    /**
+     * Finds a coddivisa and uses it as selected currency.
+     * 
+     * @param object $model
+     */
+    public function findDivisa($model)
+    {
+        if (isset($model->coddivisa)) {
+            self::$selectedDivisa = static::get($model->coddivisa);
+        }
+    }
+
     /**
      * Returns the value of the formatted currency.
      *
      * @param float|string $number
      * @param int|string   $decimals
-     * @param bool         $addSymbol
+     * @param string       $decoration
      *
      * @return string
      */
-    public function format($number, $decimals = FS_NF0, $addSymbol = true)
+    public static function format($number, $decimals = FS_NF0, $decoration = 'symbol')
     {
-        $txt = number_format((float) $number, (int) $decimals, FS_NF1, FS_NF2);
-        if (!$addSymbol) {
-            return $txt;
+        $txt = parent::format($number, $decimals);
+        switch ($decoration) {
+            case 'symbol':
+                return FS_CURRENCY_POS === 'right' ? $txt . ' ' . static::getSymbol() : static::getSymbol() . ' ' . $txt;
+
+            case 'coddivisa':
+                return isset(self::$selectedDivisa) ? $txt . ' ' . self::$selectedDivisa->coddivisa : $txt . ' ???';
+
+            default:
+                return $txt;
+        }
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public static function getSymbol()
+    {
+        return isset(self::$selectedDivisa) ? (string) self::$selectedDivisa->simbolo : '?';
+    }
+
+    /**
+     * Return format mask for edit grid
+     *
+     * @param int $decimals
+     * 
+     * @return array
+     */
+    public static function gridMoneyFormat($decimals = FS_NF0)
+    {
+        $moneyFormat = '0.';
+        for ($num = 0; $num < $decimals; $num++) {
+            $moneyFormat .= '0';
         }
 
-        $symbol = '€';
-        if (FS_POS_DIVISA === 'right') {
-            return $txt . ' ' . $symbol;
+        return ['pattern' => $moneyFormat];
+    }
+
+    /**
+     * 
+     * @param string $coddivisa
+     *
+     * @return Divisa
+     */
+    private static function get($coddivisa)
+    {
+        foreach (self::$divisas as $div) {
+            if ($div->coddivisa == $coddivisa) {
+                return $div;
+            }
         }
 
-        return $symbol . ' ' . $txt;
+        return new Divisa();
     }
 }

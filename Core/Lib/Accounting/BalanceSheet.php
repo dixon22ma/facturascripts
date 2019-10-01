@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,24 +10,27 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\Accounting;
+
+use FacturaScripts\Dinamic\Model\BalanceCuentaA;
+use FacturaScripts\Dinamic\Model\Partida;
 
 /**
  * Description of BalanceSheet
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Raul Jiménez <comercial@nazcanetworks.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
+ * @author Raul Jiménez         <comercial@nazcanetworks.com>
+ * @author Artex Trading sa     <jcuello@artextrading.com>
  */
 class BalanceSheet extends AccountingBase
 {
+
     /**
      * Date from for filter
      *
@@ -42,15 +45,25 @@ class BalanceSheet extends AccountingBase
      */
     protected $dateToPrev;
 
+    public function __construct()
+    {
+        parent::__construct();
+
+        /// needed dependencies
+        new Partida();
+        new BalanceCuentaA();
+    }
+
     /**
-     * Generate the balance ammounts between two dates.     *
+     * Generate the balance amounts between two dates.
      *
      * @param string $dateFrom
      * @param string $dateTo
+     * @param array  $params
      *
      * @return array
      */
-    public function generate($dateFrom, $dateTo)
+    public function generate(string $dateFrom, string $dateTo, array $params = [])
     {
         $this->dateFrom = $dateFrom;
         $this->dateTo = $dateTo;
@@ -79,7 +92,11 @@ class BalanceSheet extends AccountingBase
         $balanceCalculado = [];
         foreach ($data as $lineaBalance) {
             if (!array_key_exists($lineaBalance['naturaleza'], $balanceCalculado)) {
-                $balanceCalculado[$lineaBalance['naturaleza']] = ['descripcion' => $lineaBalance['naturaleza'] = 'A' ? 'ACTIVO' : 'PASIVO', 'saldo' => $lineaBalance['saldo'], 'saldoprev' => $lineaBalance['saldoprev']];
+                $balanceCalculado[$lineaBalance['naturaleza']] = [
+                    'descripcion' => $lineaBalance['naturaleza'] == 'A' ? 'ACTIVO' : 'PASIVO',
+                    'saldo' => $lineaBalance['saldo'],
+                    'saldoprev' => $lineaBalance['saldoprev']
+                ];
             } else {
                 $balanceCalculado[$lineaBalance['naturaleza']]['saldo'] += $lineaBalance['saldo'];
                 $balanceCalculado[$lineaBalance['naturaleza']]['saldoprev'] += $lineaBalance['saldoprev'];
@@ -114,10 +131,10 @@ class BalanceSheet extends AccountingBase
         $sql = 'SELECT cb.codbalance,cb.naturaleza,cb.descripcion1,cb.descripcion2,cb.descripcion3,cb.descripcion4,ccb.codcuenta,'
             . ' SUM(CASE WHEN asto.fecha BETWEEN ' . $dateFrom . ' AND ' . $dateTo . ' THEN pa.debe - pa.haber ELSE 0 END) saldo,'
             . ' SUM(CASE WHEN asto.fecha BETWEEN ' . $dateFromPrev . ' AND ' . $dateToPrev . ' THEN pa.debe - pa.haber ELSE 0 END) saldoprev'
-            . ' FROM co_cuentascbba ccb '
-            . ' INNER JOIN co_codbalances08 cb ON ccb.codbalance = cb.codbalance '
-            . ' INNER JOIN co_partidas pa ON substr(pa.codsubcuenta, 1, 1) BETWEEN \'1\' AND \'5\' AND pa.codsubcuenta LIKE CONCAT(ccb.codcuenta,\'%\')'
-            . ' INNER JOIN co_asientos asto ON asto.idasiento = pa.idasiento and asto.fecha BETWEEN ' . $dateFromPrev . ' AND ' . $dateTo
+            . ' FROM balancescuentasabreviadas ccb '
+            . ' INNER JOIN balances cb ON ccb.codbalance = cb.codbalance '
+            . ' INNER JOIN partidas pa ON substr(pa.codsubcuenta, 1, 1) BETWEEN \'1\' AND \'5\' AND pa.codsubcuenta LIKE CONCAT(ccb.codcuenta,\'%\')'
+            . ' INNER JOIN asientos asto ON asto.idasiento = pa.idasiento and asto.fecha BETWEEN ' . $dateFromPrev . ' AND ' . $dateTo
             . ' WHERE cb.naturaleza IN (\'A\', \'P\')'
             . ' GROUP BY 1, 2, 3, 4, 5, 6, 7 '
             . ' ORDER BY cb.naturaleza, cb.nivel1, cb.nivel2, cb.orden3, cb.nivel4';
@@ -143,7 +160,7 @@ class BalanceSheet extends AccountingBase
             $balance[$index] = [
                 'descripcion' => $index,
                 'saldo' => $linea['saldo'],
-                'saldoprev' => $linea['saldoprev'], ];
+                'saldoprev' => $linea['saldoprev'],];
         } else {
             $balance[$index]['saldo'] += $linea['saldo'];
             $balance[$index]['saldoprev'] += $linea['saldoprev'];
@@ -159,10 +176,9 @@ class BalanceSheet extends AccountingBase
      */
     protected function processLine($line)
     {
-        $line['descripcion'] = $this->fixHtml($line['descripcion']);
-        $line['saldo'] = $this->divisaTools->format($line['saldo'], FS_NF0, false);
-        $line['saldoprev'] = $this->divisaTools->format($line['saldoprev'], FS_NF0, false);
-
+        $line['descripcion'] = $this->toolBox()->utils()->fixHtml($line['descripcion']);
+        $line['saldo'] = $this->toolBox()->coins()->format($line['saldo'], FS_NF0, '');
+        $line['saldoprev'] = $this->toolBox()->coins()->format($line['saldoprev'], FS_NF0, '');
         return $line;
     }
 }

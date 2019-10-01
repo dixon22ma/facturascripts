@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2014-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2014-2019 Carlos Garcia Gomez  <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,15 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A group of customers, which may be associated with a rate.
@@ -38,11 +36,11 @@ class GrupoClientes extends Base\ModelClass
     public $codgrupo;
 
     /**
-     * Group name.
+     * Accounting code.
      *
      * @var string
      */
-    public $nombre;
+    public $codsubcuenta;
 
     /**
      * Code of the associated rate, if any.
@@ -52,13 +50,25 @@ class GrupoClientes extends Base\ModelClass
     public $codtarifa;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Group name.
+     *
+     * @var string
+     */
+    public $nombre;
+
+    /**
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
      *
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'gruposclientes';
+        /// As there is a key outside of tariffs, we have to check that table before
+        new Tarifa();
+
+        return parent::install();
     }
 
     /**
@@ -82,30 +92,32 @@ class GrupoClientes extends Base\ModelClass
     }
 
     /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'gruposclientes';
+    }
+
+    /**
      * Returns True if there is no erros on properties values.
      *
      * @return bool
      */
     public function test()
     {
-        $this->nombre = Utils::noHtml($this->nombre);
+        if (!empty($this->codgrupo) && !preg_match('/^[A-Z0-9_\+\.\-]{1,6}$/i', $this->codgrupo)) {
+            $this->toolBox()->i18nLog()->warning(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codgrupo, '%column%' => 'codgrupo', '%min%' => '1', '%max%' => '6']
+            );
+            return false;
+        }
 
-        return true;
-    }
-
-    /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
-     *
-     * @return string
-     */
-    public function install()
-    {
-        /// As there is a key outside of tariffs, we have to check that table before
-        new Tarifa();
-
-        return '';
+        $this->nombre = $this->toolBox()->utils()->noHtml($this->nombre);
+        return parent::test();
     }
 
     /**
@@ -116,8 +128,23 @@ class GrupoClientes extends Base\ModelClass
      *
      * @return string
      */
-    public function url($type = 'auto', $list = 'List')
+    public function url(string $type = 'auto', string $list = 'ListCliente?activetab=List')
     {
-        return parent::url($type, 'ListCliente?active=List');
+        return parent::url($type, $list);
+    }
+
+    /**
+     * 
+     * @param array $values
+     *
+     * @return bool
+     */
+    protected function saveInsert(array $values = [])
+    {
+        if (empty($this->codgrupo)) {
+            $this->codgrupo = (string) $this->newCode();
+        }
+
+        return parent::saveInsert($values);
     }
 }

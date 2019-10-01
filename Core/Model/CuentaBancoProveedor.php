@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2014-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2014-2018 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,13 +10,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
 /**
@@ -26,6 +25,7 @@ namespace FacturaScripts\Core\Model;
  */
 class CuentaBancoProveedor extends Base\BankAccount
 {
+
     use Base\ModelTrait;
 
     /**
@@ -43,26 +43,6 @@ class CuentaBancoProveedor extends Base\BankAccount
     public $principal;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
-    {
-        return 'cuentasbcopro';
-    }
-
-    /**
-     * Returns the name of the column that is the model's primary key.
-     *
-     * @return string
-     */
-    public static function primaryColumn()
-    {
-        return 'codcuenta';
-    }
-
-    /**
      * Reset the values of all model properties.
      */
     public function clear()
@@ -72,32 +52,50 @@ class CuentaBancoProveedor extends Base\BankAccount
     }
 
     /**
-     * Stores the model data in the database.
-     *
+     * 
+     * @return string
+     */
+    public function install()
+    {
+        /// needed dependencies
+        new Proveedor();
+
+        return parent::install();
+    }
+
+    /**
+     * 
      * @return bool
      */
     public function save()
     {
-        if ($this->test()) {
-            if ($this->exists()) {
-                $allOK = $this->saveUpdate();
-            } else {
-                $this->codcuenta = $this->newCode();
-                $allOK = $this->saveInsert();
-            }
-
-            if ($allOK) {
-                /// If this account is the main one, we demarcate the others
-                $sql = 'UPDATE ' . static::tableName()
-                    . ' SET principal = false'
-                    . ' WHERE codproveedor = ' . self::$dataBase->var2str($this->codproveedor)
-                    . ' AND codcuenta <> ' . self::$dataBase->var2str($this->codcuenta) . ';';
-                $allOK = self::$dataBase->exec($sql);
-            }
-
-            return $allOK;
+        if (parent::save()) {
+            $this->updatePrimaryAccount();
+            return true;
         }
 
         return false;
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'cuentasbcopro';
+    }
+
+    protected function updatePrimaryAccount()
+    {
+        if ($this->principal) {
+            /// If this account is the main one, we demarcate the others
+            $sql = 'UPDATE ' . static::tableName()
+                . ' SET principal = false'
+                . ' WHERE codproveedor = ' . self::$dataBase->var2str($this->codproveedor)
+                . ' AND codcuenta <> ' . self::$dataBase->var2str($this->codcuenta) . ';';
+            self::$dataBase->exec($sql);
+        }
     }
 }

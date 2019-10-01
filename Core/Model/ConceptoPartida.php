@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A predefined concept for a line item (the line of an accounting entry).
@@ -28,6 +25,7 @@ use FacturaScripts\Core\Base\Utils;
  */
 class ConceptoPartida extends Base\ModelClass
 {
+
     use Base\ModelTrait;
 
     /**
@@ -35,7 +33,7 @@ class ConceptoPartida extends Base\ModelClass
      *
      * @var string
      */
-    public $idconceptopar;
+    public $codconcepto;
 
     /**
      * Concept of departure.
@@ -45,23 +43,33 @@ class ConceptoPartida extends Base\ModelClass
     public $concepto;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
-     * @return string
-     */
-    public static function tableName()
-    {
-        return 'co_conceptospar';
-    }
-
-    /**
      * Returns the name of the column that is the model's primary key.
      *
      * @return string
      */
     public static function primaryColumn()
     {
-        return 'idconceptopar';
+        return 'codconcepto';
+    }
+
+    /**
+     * Returns the name of the column that describes the model, such as name, description...
+     *
+     * @return string
+     */
+    public function primaryDescriptionColumn()
+    {
+        return 'codconcepto';
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'conceptos_partidas';
     }
 
     /**
@@ -71,8 +79,20 @@ class ConceptoPartida extends Base\ModelClass
      */
     public function test()
     {
-        $this->concepto = Utils::noHtml($this->concepto);
+        $this->concepto = $this->toolBox()->utils()->noHtml($this->concepto);
+        return parent::test();
+    }
 
-        return true;
+    /**
+     * Returns the url where to see / modify the data.
+     *
+     * @param string $type
+     * @param string $list
+     *
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'ListAsiento?activetab=List')
+    {
+        return parent::url($type, $list);
     }
 }

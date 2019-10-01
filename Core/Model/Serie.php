@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,16 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A series of invoicing or accounting, to have different numbering
@@ -33,7 +30,13 @@ class Serie extends Base\ModelClass
     use Base\ModelTrait;
 
     /**
-     * Primary key. Varchar (2).
+     *
+     * @var int
+     */
+    public $canal;
+
+    /**
+     * Primary key. Varchar (4).
      *
      * @var string
      */
@@ -47,6 +50,12 @@ class Serie extends Base\ModelClass
     public $descripcion;
 
     /**
+     *
+     * @var int
+     */
+    public $iddiario;
+
+    /**
      * If associated invoices are without tax True, else False.
      *
      * @var bool
@@ -54,34 +63,49 @@ class Serie extends Base\ModelClass
     public $siniva;
 
     /**
-     * % IRPF withholding of the associated invoices.
-     *
-     * @var float|int
+     * Reset the values of all model properties.
      */
-    public $irpf;
+    public function clear()
+    {
+        parent::clear();
+        $this->siniva = false;
+    }
 
     /**
-     * Exercise for which we assign the initial numbering of the series.
-     *
-     * @var string
+     * Removed payment method from database.
+     * 
+     * @return bool
      */
-    public $codejercicio;
+    public function delete()
+    {
+        if ($this->isDefault()) {
+            $this->toolBox()->i18nLog()->warning('cant-delete-default-serie');
+            return false;
+        }
+
+        return parent::delete();
+    }
 
     /**
-     * Initial numbering for the invoices of this series.
-     *
-     * @var int
-     */
-    public $numfactura;
-
-    /**
-     * Returns the name of the table that uses this model.
-     *
+     * 
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'series';
+        /// neede dependencies
+        new Diario();
+
+        return parent::install();
+    }
+
+    /**
+     * Returns True if this is the default serie.
+     *
+     * @return bool
+     */
+    public function isDefault()
+    {
+        return $this->codserie === $this->toolBox()->appSettings()->get('default', 'codserie');
     }
 
     /**
@@ -95,24 +119,13 @@ class Serie extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
-     */
-    public function clear()
-    {
-        parent::clear();
-        $this->siniva = false;
-        $this->irpf = 0.0;
-        $this->numfactura = 1;
-    }
-
-    /**
-     * Returns True if is the default serie for the company.
+     * Returns the name of the table that uses this model.
      *
-     * @return bool
+     * @return string
      */
-    public function isDefault()
+    public static function tableName()
     {
-        return $this->codserie === AppSettings::get('default', 'codserie');
+        return 'series';
     }
 
     /**
@@ -122,23 +135,16 @@ class Serie extends Base\ModelClass
      */
     public function test()
     {
-        $status = false;
-
         $this->codserie = trim($this->codserie);
-        $this->descripcion = Utils::noHtml($this->descripcion);
-
-        if ($this->numfactura < 1) {
-            $this->numfactura = 1;
+        if (!preg_match('/^[A-Z0-9_\+\.\-]{1,4}$/i', $this->codserie)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codserie, '%column%' => 'codserie', '%min%' => '1', '%max%' => '4']
+            );
+            return false;
         }
 
-        if (!preg_match('/^[A-Z0-9]{1,4}$/i', $this->codserie)) {
-            self::$miniLog->alert(self::$i18n->trans('serie-cod-invalid'));
-        } elseif (!(strlen($this->descripcion) > 1) && !(strlen($this->descripcion) < 100)) {
-            self::$miniLog->alert(self::$i18n->trans('serie-desc-invalid'));
-        } else {
-            $status = true;
-        }
-
-        return $status;
+        $this->descripcion = $this->toolBox()->utils()->noHtml($this->descripcion);
+        return parent::test();
     }
 }

@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,17 +10,22 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\Export;
 
-use FacturaScripts\Core\Base;
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+use FacturaScripts\Core\Base\NumberTools;
+use FacturaScripts\Core\Base\Translator;
+use FacturaScripts\Core\Base\Utils;
+use FacturaScripts\Core\Model\Base\BusinessDocument;
+use FacturaScripts\Core\Model\Base\ModelClass;
 use Symfony\Component\HttpFoundation\Response;
+use XLSXWriter;
 
 /**
  * XLS export data.
@@ -29,74 +34,80 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class XLSExport implements ExportInterface
 {
+
     const LIST_LIMIT = 1000;
+
+    /**
+     * Translator object
+     *
+     * @var Translator
+     */
+    protected $i18n;
+
+    /**
+     * Class with number tools (to format numbers)
+     *
+     * @var NumberTools
+     */
+    protected $numberTools;
 
     /**
      * XLSX object.
      *
-     * @var \XLSXWriter
+     * @var XLSXWriter
      */
     private $writer;
 
     /**
-     * Return the full document.
-     *
-     * @return bool|string
+     * PDFExport constructor.
      */
-    public function getDoc()
+    public function __construct()
     {
-        return $this->writer->writeToString();
+        $this->i18n = new Translator();
+        $this->numberTools = new NumberTools();
     }
 
     /**
-     * Blank document.
-     */
-    public function newDoc()
-    {
-        $this->writer = new \XLSXWriter();
-        $this->writer->setAuthor('FacturaScripts');
-    }
-    
-    /**
-     * Set headers and output document content to response.
+     * Adds a new page with the document data.
      *
-     * @param Response $response
+     * @param BusinessDocument $model
      */
-    public function show(&$response)
+    public function generateBusinessDocPage($model)
     {
-        $response->headers->set('Content-Type', 'text/vnd.ms-excel; charset=utf-8');
-        $response->headers->set('Content-Disposition', 'attachment;filename=doc.xlsx');
-        $response->setContent($this->getDoc());
-    }
-
-    /**
-     * Adds a new page with the model data.
-     *
-     * @param mixed  $model
-     * @param array  $columns
-     * @param string $title
-     */
-    public function generateModelPage($model, $columns, $title = '')
-    {
+        $headers = [
+            'reference' => $this->i18n->trans('reference'),
+            'description' => $this->i18n->trans('description'),
+            'quantity' => $this->i18n->trans('quantity'),
+            'price' => $this->i18n->trans('price'),
+            'discount' => $this->i18n->trans('discount'),
+            'tax' => $this->i18n->trans('tax'),
+            'total' => $this->i18n->trans('total'),
+        ];
         $tableData = [];
-        foreach ((array) $model as $key => $value) {
-            if (is_string($value)) {
-                $tableData[] = ['key' => $key, 'value' => $value];
-            }
+        foreach ($model->getlines() as $line) {
+            $tableData[] = [
+                'reference' => Utils::fixHtml($line->referencia),
+                'description' => Utils::fixHtml($line->descripcion),
+                'quantity' => $this->numberTools->format($line->cantidad),
+                'price' => $this->numberTools->format($line->pvpunitario),
+                'discount' => $this->numberTools->format($line->dtopor),
+                'tax' => $this->numberTools->format($line->iva),
+                'total' => $this->numberTools->format($line->pvptotal),
+            ];
         }
-
-        $this->writer->writeSheet($tableData, $title, ['key' => 'string', 'value' => 'string']);
+        $this->generateTablePage($headers, $tableData);
+        $this->generateModelPage($model, [], 'doc');
     }
 
     /**
      * Adds a new page with a table listing all models data.
      *
-     * @param mixed                         $model
-     * @param Base\DataBase\DataBaseWhere[] $where
-     * @param array                         $order
-     * @param int                           $offset
-     * @param array                         $columns
-     * @param string                        $title
+     * @param ModelClass      $model
+     * @param DataBaseWhere[] $where
+     * @param array           $order
+     * @param int             $offset
+     * @param array           $columns
+     * @param string          $title
      */
     public function generateListModelPage($model, $where, $order, $offset, $columns, $title = '')
     {
@@ -123,20 +134,22 @@ class XLSExport implements ExportInterface
     }
 
     /**
-     * Adds a new page with the document data.
+     * Adds a new page with the model data.
      *
-     * @param mixed $model
+     * @param ModelClass $model
+     * @param array      $columns
+     * @param string     $title
      */
-    public function generateDocumentPage($model)
+    public function generateModelPage($model, $columns, $title = '')
     {
         $tableData = [];
         foreach ((array) $model as $key => $value) {
             if (is_string($value)) {
-                $tableData[] = ['key' => $key, 'value' => $value];
+                $tableData[] = ['key' => $key, 'value' => Utils::fixHtml($value)];
             }
         }
 
-        $this->writer->writeSheet($tableData, 'doc', ['key' => 'string', 'value' => 'string']);
+        $this->writer->writeSheet($tableData, $title, ['key' => 'string', 'value' => 'string']);
     }
 
     /**
@@ -155,25 +168,43 @@ class XLSExport implements ExportInterface
     }
 
     /**
-     * Set the table content.
+     * Return the full document.
      *
-     * @param $columns
-     * @param $tableCols
-     * @param $sheetHeaders
+     * @return string
      */
-    private function setTableColumns(&$columns, &$tableCols, &$sheetHeaders)
+    public function getDoc()
     {
-        foreach ($columns as $col) {
-            if (isset($col->columns)) {
-                $this->setTableColumns($col->columns, $tableCols, $sheetHeaders);
-                continue;
-            }
+        return (string) $this->writer->writeToString();
+    }
 
-            if (isset($col->widget->fieldName)) {
-                $tableCols[$col->widget->fieldName] = $col->widget->fieldName;
-                $sheetHeaders[$col->widget->fieldName] = 'string';
-            }
-        }
+    /**
+     * Blank document.
+     */
+    public function newDoc()
+    {
+        $this->writer = new XLSXWriter();
+        $this->writer->setAuthor('FacturaScripts');
+    }
+
+    /**
+     * 
+     * @param string $orientation
+     */
+    public function setOrientation(string $orientation)
+    {
+        /// Not implemented
+    }
+
+    /**
+     * Set headers and output document content to response.
+     *
+     * @param Response $response
+     */
+    public function show(Response &$response)
+    {
+        $response->headers->set('Content-Type', 'text/vnd.ms-excel; charset=utf-8');
+        $response->headers->set('Content-Disposition', 'attachment;filename=doc.xlsx');
+        $response->setContent($this->getDoc());
     }
 
     /**
@@ -196,10 +227,32 @@ class XLSExport implements ExportInterface
                     continue;
                 }
 
-                $tableData[$key][$col] = $row->{$col};
+                $tableData[$key][$col] = Utils::fixHtml($row->{$col});
             }
         }
 
         return $tableData;
+    }
+
+    /**
+     * Sets the table content.
+     * 
+     * @param array $columns
+     * @param array $tableCols
+     * @param array $sheetHeaders
+     */
+    private function setTableColumns(&$columns, &$tableCols, &$sheetHeaders)
+    {
+        foreach ($columns as $col) {
+            if (isset($col->columns)) {
+                $this->setTableColumns($col->columns, $tableCols, $sheetHeaders);
+                continue;
+            }
+
+            if (!$col->hidden()) {
+                $tableCols[$col->widget->fieldname] = $col->widget->fieldname;
+                $sheetHeaders[$col->widget->fieldname] = 'string';
+            }
+        }
     }
 }

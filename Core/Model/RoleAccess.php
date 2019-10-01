@@ -1,8 +1,8 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2016       Joe Nilson             <joenilson at gmail.com>
- * Copyright (C) 2017-2018  Carlos García Gómez    <carlos@facturascripts.com>
+ * Copyright (C) 2016       Joe Nilson          <joenilson at gmail.com>
+ * Copyright (C) 2017-2019  Carlos García Gómez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -11,13 +11,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
 use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
@@ -25,33 +24,13 @@ use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
 /**
  * Defines the individual permissions for each page within a user role.
  *
- * @author Joe Nilson            <joenilson at gmail.com>
- * @author Carlos García Gómez <carlos@facturascripts.com>
+ * @author Joe Nilson           <joenilson at gmail.com>
+ * @author Carlos García Gómez  <carlos@facturascripts.com>
  */
 class RoleAccess extends Base\ModelClass
 {
+
     use Base\ModelTrait;
-
-    /**
-     * Identifier.
-     *
-     * @var int
-     */
-    public $id;
-
-    /**
-     * Role code.
-     *
-     * @var string
-     */
-    public $codrole;
-
-    /**
-     * Name of the page.
-     *
-     * @var string
-     */
-    public $pagename;
 
     /**
      * Permission to delete.
@@ -68,13 +47,70 @@ class RoleAccess extends Base\ModelClass
     public $allowupdate;
 
     /**
-     * Returns the name of the table that uses this model.
+     * Role code.
      *
+     * @var string
+     */
+    public $codrole;
+
+    /**
+     * Identifier.
+     *
+     * @var int
+     */
+    public $id;
+
+    /**
+     * Name of the page.
+     *
+     * @var string
+     */
+    public $pagename;
+
+    /**
+     * Add the indicated page list to the Role group
+     *
+     * @param string $codrole
+     * @param Page[] $pages
+     *
+     * @return bool
+     */
+    public static function addPagesToRole($codrole, $pages)
+    {
+        $roleAccess = new static();
+        foreach ($pages as $page) {
+            $where = [
+                new DataBaseWhere('codrole', $codrole),
+                new DataBaseWhere('pagename', $page->name)
+            ];
+
+            if ($roleAccess->loadFromCode('', $where)) {
+                continue;
+            }
+
+            $roleAccess->codrole = $codrole;
+            $roleAccess->pagename = $page->name;
+            $roleAccess->allowdelete = true;
+            $roleAccess->allowupdate = true;
+            if (!$roleAccess->save()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'roles_access';
+        /// needed dependencies
+        new Role();
+        new User();
+
+        return parent::install();
     }
 
     /**
@@ -88,33 +124,12 @@ class RoleAccess extends Base\ModelClass
     }
 
     /**
-     * Add the indicated page list to the Role group
+     * Returns the name of the table that uses this model.
      *
-     * @param string $codrole
-     * @param Page[] $pages
-     *
-     * @return bool
+     * @return string
      */
-    public static function addPagesToRole($codrole, $pages)
+    public static function tableName()
     {
-        $where = [new DataBaseWhere('codrole', $codrole)];
-        $roleAccess = new self();
-
-        foreach ($pages as $record) {
-            $where[] = new DataBaseWhere('pagename', $record->name);
-
-            if (!$roleAccess->loadFromCode('', $where)) {
-                $roleAccess->codrole = $codrole;
-                $roleAccess->pagename = $record->name;
-                $roleAccess->allowdelete = true;
-                $roleAccess->allowupdate = true;
-                if (!$roleAccess->save()) {
-                    return false;
-                }
-            }
-            unset($where[1]);
-        }
-
-        return true;
+        return 'roles_access';
     }
 }

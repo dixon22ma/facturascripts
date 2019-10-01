@@ -13,18 +13,15 @@
     </column>
     <column>
         <name>codiso</name>
-        <type>character varying(3)</type>
-        <null>YES</null>
+        <type>character varying(5)</type>
     </column>
     <column>
         <name>descripcion</name>
         <type>character varying(100)</type>
-        <null>YES</null>
     </column>
     <column>
         <name>simbolo</name>
         <type>character varying(10)</type>
-        <null>YES</null>
     </column>
     <column>
         <name>tasaconv</name>

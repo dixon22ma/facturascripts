@@ -1,7 +1,8 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2016-2018    Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2014-2019  Carlos Garcia Gomez       <carlos@facturascripts.com>
+ * Copyright (C) 2014-2015  Francesc Pineda Segarra   <shawe.ewahs@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,67 +11,104 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Model;
 
+use FacturaScripts\Core\Base\DataBase\DataBaseWhere;
+
 /**
- * Description of linea_transferencia_stock
+ * Transfers stock lines.
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
+ * @author Cristo M. Estévez Hernández  <cristom.estevez@gmail.com>
+ * @author Carlos Garcia Gomez          <carlos@facturascripts.com>
  */
-class LineaTransferenciaStock extends Base\ModelClass
+class LineaTransferenciaStock extends Base\ModelOnChangeClass
 {
+
     use Base\ModelTrait;
 
     /**
-     * Primary key. Integer.
-     *
-     * @var int
-     */
-    public $idlinea;
-
-    /**
-     * Transfer identifier.
-     *
-     * @var int
-     */
-    public $idtrans;
-
-    /**
-     * Reference.
-     *
-     * @var string
-     */
-    public $referencia;
-
-    /**
-     * Quantity.
+     * Quantity of product transfered
      *
      * @var float|int
      */
     public $cantidad;
 
     /**
-     * Description of the transfer.
+     * Primary key of line transfer stock. Autoincremental
+     *
+     * @var int
+     */
+    public $idlinea;
+
+    /**
+     * Foreign key with Productos table.
+     *
+     * @var int
+     */
+    public $idproducto;
+
+    /**
+     * Foreign key with head of this transfer line.
+     *
+     * @var int
+     */
+    public $idtrans;
+
+    /**
      *
      * @var string
      */
-    public $descripcion;
+    public $referencia;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
+     * Reset the values of all model properties.
+     */
+    public function clear()
+    {
+        parent::clear();
+        $this->cantidad = 0.0;
+    }
+
+    /**
+     * 
+     * @return TransferenciaStock
+     */
+    public function getTransference()
+    {
+        $transf = new TransferenciaStock();
+        $transf->loadFromCode($this->idtrans);
+        return $transf;
+    }
+
+    /**
+     * 
+     * @return Variante
+     */
+    public function getVariant()
+    {
+        $variant = new Variante();
+        $where = [new DataBaseWhere('referencia', $this->referencia)];
+        $variant->loadFromCode('', $where);
+        return $variant;
+    }
+
+    /**
+     * 
      * @return string
      */
-    public static function tableName()
+    public function install()
     {
-        return 'lineastranstocks';
+        /// needed dependencies
+        new TransferenciaStock();
+        new Variante();
+
+        return parent::install();
     }
 
     /**
@@ -84,26 +122,92 @@ class LineaTransferenciaStock extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * 
+     * @return bool
      */
-    public function clear()
+    public function test()
     {
-        parent::clear();
-        $this->cantidad = 0;
+        $this->referencia = $this->toolBox()->utils()->noHtml($this->referencia);
+        if (is_null($this->idproducto)) {
+            $variant = $this->getVariant();
+            $this->idproducto = $variant->idproducto;
+        }
+
+        return parent::test();
     }
 
     /**
-     * This function is called when creating the model table. Returns the SQL
-     * that will be executed after the creation of the table. Useful to insert values
-     * default.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function install()
+    public static function tableName()
     {
-        /// we force the check of the stock transfers table
-        new TransferenciaStock();
+        return 'lineastransferenciasstock';
+    }
 
-        return '';
+    /**
+     * This methos is called before save (update) when some field value has changes.
+     * 
+     * @param string $field
+     *
+     * @return bool
+     */
+    protected function onChange($field)
+    {
+        switch ($field) {
+            case 'cantidad':
+                $this->updateStock();
+                return true;
+        }
+
+        return parent::onChange($field);
+    }
+
+    /**
+     * This method is called after remove this data from the database.
+     */
+    protected function onDelete()
+    {
+        $this->cantidad = 0.0;
+        $this->updateStock();
+    }
+
+    /**
+     * This method is called after insert this record in the database.
+     */
+    protected function onInsert()
+    {
+        $this->updateStock();
+    }
+
+    /**
+     * 
+     * @param array $fields
+     */
+    protected function setPreviousData(array $fields = [])
+    {
+        $more = ['cantidad'];
+        parent::setPreviousData(array_merge($more, $fields));
+    }
+
+    protected function updateStock()
+    {
+        $transfer = $this->getTransference();
+        $stock = new Stock();
+        $where = [
+            new DataBaseWhere('codalmacen', $transfer->codalmacenorigen),
+            new DataBaseWhere('referencia', $this->referencia),
+        ];
+
+        if (!$stock->loadFromCode('', $where)) {
+            $stock->codalmacen = $transfer->codalmacenorigen;
+            $stock->idproducto = $this->getVariant()->idproducto;
+            $stock->referencia = $this->referencia;
+            $stock->save();
+        }
+
+        $quantity = $this->cantidad - $this->previousData['cantidad'];
+        $stock->transferTo($transfer->codalmacendestino, $quantity);
     }
 }

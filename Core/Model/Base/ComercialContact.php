@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018    Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,18 +10,18 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model\Base;
 
-use FacturaScripts\Core\App\AppSettings;
-use FacturaScripts\Core\Base\Utils;
-use FacturaScripts\Core\Lib\IDFiscal;
-use FacturaScripts\Core\Lib\RegimenIVA;
+use FacturaScripts\Dinamic\Lib\RegimenIVA;
+use FacturaScripts\Dinamic\Model\FormaPago;
+use FacturaScripts\Dinamic\Model\Retencion;
+use FacturaScripts\Dinamic\Model\Serie;
 
 /**
  * Description of ComercialContact
@@ -53,6 +53,13 @@ abstract class ComercialContact extends Contact
     public $codproveedor;
 
     /**
+     * Identifier code of the retention applied to this contact.
+     *
+     * @var string
+     */
+    public $codretencion;
+
+    /**
      * Default series for this customer.
      *
      * @var string
@@ -69,7 +76,7 @@ abstract class ComercialContact extends Contact
     /**
      * True -> the customer no longer buys us or we do not want anything with him.
      *
-     * @var boolean
+     * @var bool
      */
     public $debaja;
 
@@ -79,21 +86,6 @@ abstract class ComercialContact extends Contact
      * @var string
      */
     public $fechabaja;
-
-    /**
-     * Type of fiscal identifier.
-     *
-     * @var IDFiscal
-     */
-    private static $idFiscal;
-
-    /**
-     * True -> the customer is a natural person.
-     * False -> the client is a legal person (company).
-     *
-     * @var boolean
-     */
-    public $personafisica;
 
     /**
      * Social reason of the client, that is, the official name. The one that appears on the invoices.
@@ -110,21 +102,6 @@ abstract class ComercialContact extends Contact
     public $regimeniva;
 
     /**
-     * Type of VAT regime
-     *
-     * @var RegimenIVA
-     */
-    private static $regimenIVA;
-
-    /**
-     * Type of tax identification of the client.
-     * Examples: CIF, NIF, CUIT ...
-     *
-     * @var string
-     */
-    public $tipoidfiscal;
-
-    /**
      * Website of the person.
      *
      * @var string
@@ -136,22 +113,7 @@ abstract class ComercialContact extends Contact
      *
      * @return mixed
      */
-    abstract public function getDirecciones();
-
-    /**
-     * ComercialContact constructor.
-     *
-     * @param array $data
-     */
-    public function __construct($data = [])
-    {
-        if (self::$idFiscal === null) {
-            self::$idFiscal = new IDFiscal();
-            self::$regimenIVA = new RegimenIVA();
-        }
-
-        parent::__construct($data);
-    }
+    abstract public function getAdresses();
 
     /**
      * Reset the values of all model properties.
@@ -159,12 +121,45 @@ abstract class ComercialContact extends Contact
     public function clear()
     {
         parent::clear();
-        $this->cifnif = '';
-        $this->codpago = AppSettings::get('default', 'codpago');
+        $this->codretencion = $this->toolBox()->appSettings()->get('default', 'codretencion');
         $this->debaja = false;
-        $this->personafisica = true;
-        $this->regimeniva = self::$regimenIVA->defaultValue();
-        $this->tipoidfiscal = self::$idFiscal->defaultValue();
+        $this->regimeniva = RegimenIVA::defaultValue();
+    }
+
+    /**
+     * This function is called when creating the model table. Returns the SQL
+     * that will be executed after the creation of the table. Useful to insert values
+     * default.
+     *
+     * @return string
+     */
+    public function install()
+    {
+        /// needed dependencies
+        new Retencion();
+        new Serie();
+        new FormaPago();
+
+        return parent::install();
+    }
+
+    /**
+     * Returns default contact retention value.
+     *
+     * @return float
+     */
+    public function irpf()
+    {
+        if (empty($this->codretencion)) {
+            return 0.0;
+        }
+
+        $retention = new Retencion();
+        if ($retention->loadFromCode($this->codretencion)) {
+            return $retention->porcentaje;
+        }
+
+        return 0.0;
     }
 
     /**
@@ -174,20 +169,15 @@ abstract class ComercialContact extends Contact
      */
     public function test()
     {
-        parent::test();
-        $this->razonsocial = Utils::noHtml($this->razonsocial);
-        $this->web = Utils::noHtml($this->web);
+        $this->debaja = !empty($this->fechabaja);
 
+        $utils = $this->toolBox()->utils();
+        $this->razonsocial = $utils->noHtml($this->razonsocial);
         if (empty($this->razonsocial)) {
             $this->razonsocial = $this->nombre;
         }
 
-        if (!$this->debaja) {
-            $this->fechabaja = null;
-        } elseif (empty($this->fechabaja)) {
-            $this->fechabaja = date('d-m-Y');
-        }
-
-        return true;
+        $this->web = $utils->noHtml($this->web);
+        return parent::test();
     }
 }

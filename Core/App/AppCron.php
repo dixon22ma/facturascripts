@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,13 +10,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\App;
 
 /**
@@ -26,22 +25,69 @@ namespace FacturaScripts\Core\App;
  */
 class AppCron extends App
 {
+
+    /**
+     * Returns the data into the standard output.
+     */
+    public function render()
+    {
+        $this->response->headers->set('Content-Type', 'text/plain');
+
+        $content = $this->response->getContent();
+        foreach ($this->toolBox()->log()->readAll() as $log) {
+            $content .= empty($content) ? $log["message"] : "\n" . $log["message"];
+        }
+
+        $this->response->setContent($content);
+        parent::render();
+    }
+
     /**
      * Runs cron.
      *
      * @return bool
      */
-    public function run()
+    public function run(): bool
     {
-        $this->response->headers->set('Content-Type', 'text/plain');
-        if ($this->dataBase->connected()) {
-            /// implement here
-            /// return true for test purposes
-            return true;
+        if (!parent::run()) {
+            return false;
         }
 
-        $this->response->setContent('DB-ERROR');
+        $startTime = new \DateTime();
+        $this->toolBox()->i18nLog()->notice('starting-cron');
 
-        return false;
+        $this->runPlugins();
+
+        $endTime = new \DateTime();
+        $executionTime = $startTime->diff($endTime);
+        $this->toolBox()->i18nLog()->notice('finished-cron', ['%timeNeeded%' => $executionTime->format("%H:%I:%S")]);
+        return true;
+    }
+
+    /**
+     * 
+     * @param int    $status
+     * @param string $message
+     */
+    protected function die(int $status, string $message = '')
+    {
+        $content = $this->toolBox()->i18n()->trans($message);
+        $this->response->setContent($content);
+        $this->response->setStatusCode($status);
+    }
+
+    /**
+     * Runs cron from enabled plugins.
+     */
+    private function runPlugins()
+    {
+        foreach ($this->pluginManager->enabledPlugins() as $pluginName) {
+            $cronClass = '\\FacturaScripts\\Plugins\\' . $pluginName . '\\Cron';
+            if (class_exists($cronClass)) {
+                $this->toolBox()->i18nLog()->notice('running-plugin-cron', ['%pluginName%' => $pluginName]);
+                $cron = new $cronClass($pluginName);
+                $cron->run();
+            }
+        }
     }
 }

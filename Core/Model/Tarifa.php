@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2018  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2013-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,15 +10,13 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A fee for the products.
@@ -30,33 +28,22 @@ class Tarifa extends Base\ModelClass
 
     use Base\ModelTrait;
 
+    const APPLY_COST = 'coste';
+    const APPLY_PRICE = 'pvp';
+
+    /**
+     * Formula to apply. Possible values (coste or pvp).
+     *
+     * @var string
+     */
+    public $aplicar;
+
     /**
      * Primary key.
      *
      * @var string
      */
     public $codtarifa;
-
-    /**
-     * Name of the rate.
-     *
-     * @var string
-     */
-    public $nombre;
-
-    /**
-     * Formula to apply.
-     *
-     * @var
-     */
-    public $aplicar_a;
-
-    /**
-     * Do not sell below cost.
-     *
-     * @var bool
-     */
-    public $mincoste;
 
     /**
      * Do not sell above retail price.
@@ -66,27 +53,72 @@ class Tarifa extends Base\ModelClass
     public $maxpvp;
 
     /**
-     * Percentage increase or discount.
+     * Do not sell below cost.
      *
-     * @var float|int
+     * @var bool
      */
-    public $incporcentual;
+    public $mincoste;
 
     /**
-     * Linear increment or linear discount.
+     * Name of the rate.
      *
-     * @var float|int
+     * @var string
      */
-    public $inclineal;
+    public $nombre;
 
     /**
-     * Returns the name of the table that uses this model.
      *
-     * @return string
+     * @var float
      */
-    public static function tableName()
+    public $valorx;
+
+    /**
+     *
+     * @var float
+     */
+    public $valory;
+
+    /**
+     * 
+     * @param float $cost
+     * @param float $price
+     *
+     * @return float
+     */
+    public function apply($cost, $price)
     {
-        return 'tarifas';
+        $finalPrice = 0.0;
+
+        switch ($this->aplicar) {
+            case self::APPLY_COST:
+                $finalPrice += $cost + ($cost * $this->valorx / 100) + $this->valory;
+                break;
+
+            case self::APPLY_PRICE:
+                $finalPrice += $price - ($price * $this->valorx / 100) - $this->valory;
+                break;
+        }
+
+        if ($this->maxpvp && $finalPrice > $price) {
+            return (float) $price;
+        } elseif ($this->mincoste && $finalPrice < $cost) {
+            return (float) $cost;
+        }
+
+        return $finalPrice > 0 ? $finalPrice : 0.0;
+    }
+
+    /**
+     * Reset the values of all model properties.
+     */
+    public function clear()
+    {
+        parent::clear();
+        $this->aplicar = self::APPLY_PRICE;
+        $this->maxpvp = false;
+        $this->mincoste = false;
+        $this->valorx = 0.0;
+        $this->valory = 0.0;
     }
 
     /**
@@ -100,148 +132,22 @@ class Tarifa extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * 
+     * @return string
      */
-    public function clear()
+    public function primaryDescriptionColumn()
     {
-        parent::clear();
-        $this->incporcentual = 0;
-        $this->inclineal = 0;
-        $this->aplicar_a = 'pvp';
-        $this->mincoste = true;
-        $this->maxpvp = true;
+        return 'nombre';
     }
 
     /**
-     * Apply an increase or decrease in the retail price.
-     *
-     * @param double $value
-     *
-     * @return int
-     */
-    private function applyFormula($value)
-    {
-        return ($this->aplicar_a === 'pvp') ? (0 - $value) : $value;
-    }
-
-    /**
-     * Returns a percentage increase.
-     *
-     * @return double
-     */
-    public function x()
-    {
-        return $this->applyFormula($this->incporcentual);
-    }
-
-    /**
-     * Assign a percentage increase.
-     *
-     * @param float $dto
-     */
-    public function setX($dto)
-    {
-        $this->incporcentual = $this->applyFormula($dto);
-    }
-
-    /**
-     * Returns a linear increment.
-     *
-     * @return double
-     */
-    public function y()
-    {
-        return $this->applyFormula($this->inclineal);
-    }
-
-    /**
-     * Assign a linear increment.
-     *
-     * @param float $inc
-     */
-    public function setY($inc)
-    {
-        $this->inclineal = $this->applyFormula($inc);
-    }
-
-    /**
-     * Returns an explanatory text of what the rate does.
+     * Returns the name of the table that uses this model.
      *
      * @return string
      */
-    public function diff()
+    public static function tableName()
     {
-        $x = $this->x();
-        $y = $this->y();
-
-        $texto = 'Precio de coste ';
-        if ($this->aplicar_a === 'pvp') {
-            $texto = 'Precio de venta ';
-            $x = 0 - $x;
-            $y = 0 - $y;
-        }
-
-        if ($x !== 0) {
-            if ($x > 0) {
-                $texto .= '+';
-            }
-
-            $texto .= $x . '% ';
-        }
-
-        if ($y !== 0) {
-            if ($y > 0) {
-                $texto .= ' +';
-            }
-
-            $texto .= $y;
-        }
-
-        return $texto;
-    }
-
-    /**
-     * Fill in the discounts and the tariff information from a list of articles.
-     *
-     * @param array $articulos
-     */
-    public function setPrecios(&$articulos)
-    {
-        foreach ($articulos as $articulo) {
-            $articulo->codtarifa = $this->codtarifa;
-            $articulo->tarifa_nombre = $this->nombre;
-            $articulo->tarifa_url = $this->url();
-            $articulo->dtopor = 0;
-
-            $pvp = $articulo->pvp;
-            $articulo->pvp = $articulo->preciocoste() * (100 + $this->x()) / 100 + $this->y();
-            if ($this->aplicar_a === 'pvp') {
-                if ($this->y() === 0 && $this->x() >= 0) {
-                    /// si y === 0 y x >= 0, usamos x como descuento
-                    $articulo->dtopor = $this->x();
-                } else {
-                    $articulo->pvp = $articulo->pvp * (100 - $this->x()) / 100 - $this->y();
-                }
-            }
-
-            $articulo->tarifa_diff = $this->diff();
-
-            if ($this->mincoste) {
-                if ($articulo->pvp * (100 - $articulo->dtopor) / 100 < $articulo->preciocoste()) {
-                    $articulo->dtopor = 0;
-                    $articulo->pvp = $articulo->preciocoste();
-                    $articulo->tarifa_diff = 'Precio de coste alcanzado';
-                }
-            }
-
-            if ($this->maxpvp) {
-                if ($articulo->pvp * (100 - $articulo->dtopor) / 100 > $pvp) {
-                    $articulo->dtopor = 0;
-                    $articulo->pvp = $pvp;
-                    $articulo->tarifa_diff = 'Precio de venta alcanzado';
-                }
-            }
-        }
+        return 'tarifas';
     }
 
     /**
@@ -251,19 +157,16 @@ class Tarifa extends Base\ModelClass
      */
     public function test()
     {
-        $status = false;
-
         $this->codtarifa = trim($this->codtarifa);
-        $this->nombre = Utils::noHtml($this->nombre);
-
-        if (empty($this->codtarifa) || strlen($this->codtarifa) > 6) {
-            self::$miniLog->alert(self::$i18n->trans('rate-code-valid-length'));
-        } elseif (empty($this->nombre) || strlen($this->nombre) > 50) {
-            self::$miniLog->alert(self::$i18n->trans('rate-name-valid-length'));
-        } else {
-            $status = true;
+        if (!preg_match('/^[A-Z0-9_\+\.\-]{1,6}$/i', $this->codtarifa)) {
+            $this->toolBox()->i18nLog()->error(
+                'invalid-alphanumeric-code',
+                ['%value%' => $this->codtarifa, '%column%' => 'codtarifa', '%min%' => '1', '%max%' => '6']
+            );
+            return false;
         }
 
-        return $status;
+        $this->nombre = $this->toolBox()->utils()->noHtml($this->nombre);
+        return parent::test();
     }
 }

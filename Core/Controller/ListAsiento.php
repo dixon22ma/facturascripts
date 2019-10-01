@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,39 +10,23 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\ListController;
 
 /**
  * Controller to list the items in the Asiento model
  *
  * @author Carlos García Gómez <carlos@facturascripts.com>
  */
-class ListAsiento extends ExtendedController\ListController
+class ListAsiento extends ListController
 {
-    /**
-     * Load views
-     */
-    protected function createViews()
-    {
-        $this->addView('\FacturaScripts\Dinamic\Model\Asiento', 'ListAsiento');
-        $this->addSearchFields('ListAsiento', ['CAST(numero AS CHAR(10))', 'concepto']);
-
-        $this->addFilterDatePicker('ListAsiento', 'date', 'date', 'fecha');
-        $this->addFilterNumber('ListAsiento', 'amount', 'amount', 'importe');
-        $this->addFilterSelect('ListAsiento', 'codejercicio', 'ejercicios', '', 'nombre');
-
-        $this->addOrderBy('ListAsiento', 'numero', 'number');
-        $this->addOrderBy('ListAsiento', 'fecha', 'date', 2); /// forzamos el orden por defecto fecha desc
-    }
 
     /**
      * Returns basic page attributes
@@ -51,31 +35,105 @@ class ListAsiento extends ExtendedController\ListController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'accounting-entries';
-        $pagedata['icon'] = 'fa-balance-scale';
-        $pagedata['menu'] = 'accounting';
+        $data = parent::getPageData();
+        $data['menu'] = 'accounting';
+        $data['title'] = 'accounting-entries';
+        $data['icon'] = 'fas fa-balance-scale';
+        return $data;
+    }
 
-        return $pagedata;
+    /**
+     * Load views
+     */
+    protected function createViews()
+    {
+        $this->createViewAccountEntries();
+        $this->createViewConcepts();
+        $this->createViewJournals();
+    }
+
+    /**
+     * Add accounting entries tab
+     * 
+     * @param string $viewName
+     */
+    protected function createViewAccountEntries($viewName = 'ListAsiento')
+    {
+        $this->addView($viewName, 'Asiento', 'accounting-entries', 'fas fa-balance-scale');
+        $this->addSearchFields($viewName, ['CAST(numero AS CHAR(10))', 'concepto']);
+        $this->addOrderBy($viewName, ['fecha', 'idasiento'], 'date', 2);
+        $this->addOrderBy($viewName, ['numero', 'idasiento'], 'number');
+        $this->addOrderBy($viewName, ['importe', 'idasiento'], 'amount');
+
+        /// filters
+        $this->addFilterPeriod($viewName, 'date', 'period', 'fecha');
+        $this->addFilterNumber($viewName, 'min-total', 'amount', 'importe', '>=');
+        $this->addFilterNumber($viewName, 'max-total', 'amount', 'importe', '<=');
+
+        $selectCompany = $this->codeModel->all('empresas', 'idempresa', 'nombrecorto');
+        $this->addFilterSelect($viewName, 'idempresa', 'company', 'idempresa', $selectCompany);
+
+        $selectExercise = $this->codeModel->all('ejercicios', 'codejercicio', 'nombre');
+        $this->addFilterSelect($viewName, 'codejercicio', 'exercise', 'codejercicio', $selectExercise);
+
+        $selectJournals = $this->codeModel->all('diarios', 'iddiario', 'descripcion');
+        $this->addFilterSelect($viewName, 'iddiario', 'journals', 'iddiario', $selectJournals);
+
+        $this->addFilterNumber($viewName, 'canal', 'channel', 'canal', '=');
+
+        /// buttons
+        $newButton = [
+            'action' => 'renumber',
+            'color' => 'warning',
+            'icon' => 'fas fa-sort-numeric-down',
+            'label' => 'renumber-accounting',
+            'type' => 'modal',
+        ];
+        $this->addButton($viewName, $newButton);
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createViewConcepts($viewName = 'ListConceptoPartida')
+    {
+        $this->addView($viewName, 'ConceptoPartida', 'predefined-concepts', 'fas fa-indent');
+        $this->addSearchFields($viewName, ['codconcepto', 'descripcion']);
+        $this->addOrderBy($viewName, ['codconcepto'], 'code');
+        $this->addOrderBy($viewName, ['descripcion'], 'description');
+    }
+
+    /**
+     * 
+     * @param string $viewName
+     */
+    protected function createViewJournals($viewName = 'ListDiario')
+    {
+        $this->addView($viewName, 'Diario', 'journals', 'fas fa-book');
+        $this->addSearchFields($viewName, ['iddiario', 'descripcion']);
+        $this->addOrderBy($viewName, ['iddiario'], 'code');
+        $this->addOrderBy($viewName, ['descripcion'], 'description');
     }
 
     /**
      * Run the actions that alter data before reading it.
      *
      * @param string $action
+     *
+     * @return bool
      */
     protected function execPreviousAction($action)
     {
         switch ($action) {
             case 'renumber':
-                $model = $this->views['ListAsiento']->getModel();
-                if ($model->renumber()) {
-                    $this->miniLog->notice($this->i18n->trans('renumber-accounting-ok'));
+                $codejercicio = $this->request->request->get('exercise');
+                if ($this->views['ListAsiento']->model->renumber($codejercicio)) {
+                    $this->toolBox()->i18nLog()->notice('renumber-accounting-ok');
                 }
-                break;
-
-            default:
-                parent::execPreviousAction($action);
+                return true;
         }
+
+        return parent::execPreviousAction($action);
     }
 }

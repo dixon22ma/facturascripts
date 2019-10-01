@@ -10,13 +10,12 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Lib\DocumentReportsBase;
 
 use FacturaScripts\Core\Model;
@@ -30,6 +29,7 @@ use FacturaScripts\Core\Base\DataBase;
  */
 class DocumentReportsFilterList
 {
+
     /**
      * Structure data from
      */
@@ -64,7 +64,7 @@ class DocumentReportsFilterList
      * @param string $icon
      * @param bool $allowEmpty
      */
-    public function __construct($modelName, $selectedValue = '', $icon = 'fa-list', $allowEmpty = true)
+    public function __construct($modelName, $selectedValue = '', $icon = 'fas fa-list', $allowEmpty = true)
     {
         $this->model = new $modelName();
         $this->selectedValue = $selectedValue;
@@ -94,14 +94,16 @@ class DocumentReportsFilterList
     /**
      * Return DataBaseWhere with needed filter.
      *
-     * @return DataBase\DataBaseWhere|null
+     * @param DataBaseWhere[] $where
+     * @return bool
      */
-    public function getWhere()
+    public function getWhere(&$where): bool
     {
         if (empty($this->selectedValue)) {
-            return null;
+            return false;
         }
 
-        return new DataBase\DataBaseWhere($this->model->primaryColumn(), $this->selectedValue);
+        $where[] = new DataBase\DataBaseWhere($this->model->primaryColumn(), $this->selectedValue);
+        return true;
     }
 }

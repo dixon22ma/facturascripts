@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017  Carlos Garcia Gomez  <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -10,26 +10,26 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 namespace FacturaScripts\Core\Controller;
 
-use FacturaScripts\Core\Lib\ExtendedController;
+use FacturaScripts\Core\Lib\ExtendedController\ListController;
 
 /**
  * Controller to list the items in the Atributo model
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
- * @author Artex Trading sa <jcuello@artextrading.com>
- * @author Fco. Antonio Moreno Pérez <famphuelva@gmail.com>
+ * @author Carlos García Gómez          <carlos@facturascripts.com>
+ * @author Artex Trading sa             <jcuello@artextrading.com>
+ * @author Fco. Antonio Moreno Pérez    <famphuelva@gmail.com>
  */
-class ListAtributo extends ExtendedController\ListController
+class ListAtributo extends ListController
 {
+
     /**
      * Returns basic page attributes
      *
@@ -37,12 +37,11 @@ class ListAtributo extends ExtendedController\ListController
      */
     public function getPageData()
     {
-        $pagedata = parent::getPageData();
-        $pagedata['title'] = 'attributes';
-        $pagedata['icon'] = 'fa-sliders';
-        $pagedata['menu'] = 'warehouse';
-
-        return $pagedata;
+        $data = parent::getPageData();
+        $data['menu'] = 'warehouse';
+        $data['title'] = 'attributes';
+        $data['icon'] = 'fas fa-tshirt';
+        return $data;
     }
 
     /**
@@ -50,11 +49,13 @@ class ListAtributo extends ExtendedController\ListController
      */
     protected function createViews()
     {
-        $className = $this->getClassName();
-        $this->addView('\FacturaScripts\Dinamic\Model\Atributo', $className);
-        $this->addSearchFields($className, ['nombre', 'codatributo']);
+        $this->addView('ListAtributo', 'Atributo', 'attributes', 'fas fa-tshirt');
+        $this->addSearchFields('ListAtributo', ['nombre', 'codatributo']);
+        $this->addOrderBy('ListAtributo', ['codatributo'], 'code');
+        $this->addOrderBy('ListAtributo', ['nombre'], 'name');
 
-        $this->addOrderBy($className, 'codatributo', 'code');
-        $this->addOrderBy($className, 'nombre', 'name');
+        $this->addView('EditAtributoValor', 'AtributoValor', 'values', 'fas fa-list');
+        $this->addSearchFields('EditAtributoValor', ['valor', 'codatributo']);
+        $this->addOrderBy('EditAtributoValor', ['codatributo'], 'code');
     }
 }

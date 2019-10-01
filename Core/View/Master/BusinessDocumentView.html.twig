@@ -1,0 +1,293 @@
+{#
+    /**
+     * This file is part of FacturaScripts
+     * Copyright (C) 2017-2019 Carlos Garcia Gomez <carlos@facturascripts.com>
+     *
+     * This program is free software: you can redistribute it and/or modify
+     * it under the terms of the GNU Lesser General Public License as
+     * published by the Free Software Foundation, either version 3 of the
+     * License, or (at your option) any later version.
+     *
+     * This program is distributed in the hope that it will be useful,
+     * but WITHOUT ANY WARRANTY; without even the implied warranty of
+     * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+     * GNU Lesser General Public License for more details.
+     *
+     * You should have received a copy of the GNU Lesser General Public License
+     * along with this program. If not, see http://www.gnu.org/licenses/.
+     */
+#}
+{% set currentView = fsc.getCurrentView() %}
+
+<script type="text/javascript">
+    businessDocViewLineData = {{ currentView.getLineData() | raw }};
+    businessDocViewFormName = "form{{ currentView.getViewName() }}";
+    businessDocViewUrl = "{{ currentView.model.url('edit') | raw }}";
+    function businessDocViewDelete(viewName) {
+        bootbox.confirm({
+            title: "{{ i18n.trans('confirm-delete') }}",
+            message: "{{ i18n.trans('are-you-sure') }}",
+            closeButton: false,
+            buttons: {
+                cancel: {
+                    label: '<i class="fas fa-times"></i> {{ i18n.trans('cancel') }}'
+                },
+                confirm: {
+                    label: '<i class="fas fa-check"></i> {{ i18n.trans('confirm') }}',
+                    className: "btn-danger"
+                }
+            },
+            callback: function (result) {
+                if (result) {
+                    $("#form" + viewName + " :input[name=\"action\"]").val("delete");
+                    $("#form" + viewName).submit();
+                }
+            }
+        });
+
+        return false;
+    }
+</script>
+
+<form id="form{{ currentView.getViewName() }}" action="#" method="post">
+    <input type="hidden" name="action"/>
+    <input type="hidden" name="activetab" value="{{ currentView.getViewName() }}"/>
+    <input type="hidden" name="code" value="{{ currentView.model.primaryColumnValue() }}"/>
+    <input type="hidden" name="{{ currentView.model.primaryColumn() }}" value="{{ currentView.model.primaryColumnValue() }}"/>
+    <input type="hidden" name="idestado" value="{{ currentView.model.idestado }}" id="doc_idestado"/>
+    <input type="hidden" name="multireqtoken" value="{{ fsc.multiRequestProtection.newToken() }}"/>
+    <div class="form-row">
+        {{ _self.customSelect('doc_codalmacen', 'codalmacen', currentView.model.codalmacen, currentView.getSelectValues('Almacen')) }}
+        {% if currentView.model.subjectColumn() == 'codcliente' %}
+            {{ _self.customerSelect(i18n, 'codcliente', 'codcliente', currentView.model, fsc.getNewSubjectUrl()) }}
+        {% elseif currentView.model.subjectColumn() == 'codproveedor' %}
+            {{ _self.supplierSelect(i18n, 'codproveedor', 'codproveedor', currentView.model, fsc.getNewSubjectUrl()) }}
+        {% endif %}
+        {{ _self.customSelect('doc_codserie', 'codserie', currentView.model.codserie, currentView.getSelectValues('Serie')) }}
+        {{ _self.customInput('doc_fecha', 'fecha', currentView.model.fecha, 'text', 'fas fa-calendar-alt', {class: 'form-control datepicker'}) }}
+        {% for field in fsc.getCustomFields() %}
+            {{ _self.customInput('doc_' ~ field.name, field.name, fsc.getViewModelValue(currentView.getViewName(), field.name), 'text', field.icon, {placeholder: i18n.trans(field.label)}) }}
+        {% endfor %}
+        {{ _self.customSelect('doc_codpago', 'codpago', currentView.model.codpago, currentView.getSelectValues('FormaPago')) }}
+        {{ _self.customSelect('doc_coddivisa', 'coddivisa', currentView.model.coddivisa, currentView.getSelectValues('Divisa')) }}
+        <div class="col">
+            <div class="input-group">
+                <input type="text" id="doc_total" name="total" value="{{ currentView.model.total }}" class="form-control text-right" disabled="" />
+                <div class="input-group-append">
+                    {% if currentView.settings.btnSave %}
+                        <button type="button" class="btn btn-primary" onclick="businessDocViewSave();">
+                            <i class="fas fa-save" aria-hidden="true"></i>
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {{ _self.statusSelect(currentView.model, currentView, i18n) }}
+    </div>
+    {% if currentView.model.exists() %}
+        <div class="row">
+            {% for parentDoc in currentView.model.parentDocuments() %}
+                <div class="col">
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-backward fa-fw" aria-hidden="true"></i> {{ parentDoc.modelClassName() }}
+                        <a href="{{ parentDoc.url() }}">{{ parentDoc.primaryDescription() }}</a>
+                    </div>
+                </div>
+            {% endfor %}
+            {% if currentView.model.nick %}
+                <div class="col">
+                    <div class="alert alert-secondary text-center">
+                        <i class="fas fa-user-circle fa-fw" aria-hidden="true"></i> {{ currentView.model.nick }}
+                    </div>
+                </div>
+            {% endif %}
+            {% if currentView.model.femail %}
+                <div class="col">
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-envelope fa-fw" aria-hidden="true"></i> {{ currentView.model.femail }}
+                    </div>
+                </div>
+            {% endif %}
+            {% if currentView.model.paid() %}
+                <div class="col">
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-check fa-fw" aria-hidden="true"></i> {{ i18n.trans('paid') }}
+                    </div>
+                </div>
+            {% endif %}
+            {% if currentView.model.editable == false %}
+                <div class="col">
+                    <div class="alert alert-danger text-center">
+                        <i class="fas fa-lock fa-fw"></i> {{ i18n.trans('non-editable-document') }}
+                    </div>
+                </div>
+            {% endif %}
+            {% for childrenDoc in currentView.model.childrenDocuments() %}
+                <div class="col">
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-forward fa-fw" aria-hidden="true"></i> {{ childrenDoc.modelClassName() }}
+                        <a href="{{ childrenDoc.url() }}">{{ childrenDoc.primaryDescription() }}</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <div id="document-lines"></div>
+    <div class="form-row mt-2 mb-2">
+        <div class="col">
+            <textarea name="observaciones" class="form-control" placeholder="{{ i18n.trans('observations') }}">{{ currentView.model.observaciones | raw }}</textarea>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="col">
+            {% if fsc.hasData and currentView.settings.btnDelete %}
+                <button type="button" class="btn btn-sm btn-danger" onclick="businessDocViewDelete('{{ currentView.getViewName() }}');">
+                    <i class="fas fa-trash-alt fa-fw" aria-hidden="true"></i>
+                    <span class="d-none d-sm-inline-block">{{ i18n.trans('delete') }}</span>
+                </button>
+            {% endif %}
+        </div>
+        {% block extras %}
+        {% endblock %}
+        <div class="col text-right">
+            {% if currentView.settings.btnUndo %}
+                <a class="btn btn-sm btn-secondary" href="{{ currentView.model.url() }}">
+                    <i class="fas fa-undo fa-fw" aria-hidden="true"></i>
+                    <span class="d-none d-sm-inline-block">{{ i18n.trans('undo') }}</span>
+                </a>
+            {% endif %}
+            {% if currentView.settings.btnSave %}
+                <button type="button" class="btn btn-sm btn-primary" onclick="businessDocViewSave();">
+                    <i class="fas fa-save fa-fw" aria-hidden="true"></i> {{ i18n.trans('save') }}
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+{% macro customSelect(id, name, value, allValues = {}, allowHide = true) %}
+    {% if allowHide and allValues | length == 1 %}
+        {% for key, option in allValues %}
+            <input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ key }}"/>
+        {% endfor %}
+    {% else %}
+        <div class="col mb-2">
+            <select id="{{ id }}" name="{{ name }}" class="form-control">
+                {% for key, option in allValues %}
+                    <option value="{{ key }}"{% if value == key %} selected=""{% endif %}>
+                        {{ option | raw }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro customInput(id, name, value, type = "text", icon = NULL, attributes = NULL) %}
+    <div class="col mb-2">
+        {% if icon %}
+            <div class="input-group">
+                <span class="input-group-prepend">
+                    <span class="input-group-text">
+                        <i class="{{ icon }} fa-fw" aria-hidden="true"></i>
+                    </span>
+                </span>
+            {% endif %}
+
+            <input type="{{ type }}" id="{{ id }}" name="{{ name }}" value="{{ value | raw }}"
+                   {% if attributes.class is not defined %}
+                       class="form-control"
+                   {% endif %}
+
+                   {% for attribute,attrValue in attributes %}
+                       {{ attribute }}="{{ attrValue }}"
+                   {% endfor %} /> {# end input #}
+
+            {% if icon %}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro customerSelect(i18n, id, name, model, newUrl) %}
+    <div class="col mb-2">
+        <div class="input-group">
+            <span class="input-group-prepend">
+                {% if model.codcliente %}
+                    <a href="EditCliente?code={{ model.codcliente }}" target="_blank" class="btn btn-info">
+                        <i class="fas fa-user-cog fa-fw" aria-hidden="true"></i>
+                    </a>
+                {% else %}
+                    <a href="{{ newUrl }}" class="btn btn-success" title="{{ i18n.trans('new-customer') }}">
+                        <i class="fas fa-user-plus fa-fw" aria-hidden="true"></i>
+                    </a>
+                {% endif %}
+            </span>
+            <input type="hidden" id="{{ id }}Autocomplete" name="{{ name }}" value="{{ model.codcliente }}"/>
+            <input type="text" id="{{ id }}" value="{{ model.nombrecliente | raw }}" class="form-control autocomplete-dc"
+                   data-field="{{ id }}" data-source="Cliente" data-fieldcode="codcliente" data-fieldtitle="nombre"
+                   placeholder="{{ i18n.trans('customer') }}" autocomplete="off"/>
+        </div>
+    </div>
+{% endmacro %}
+
+{% macro supplierSelect(i18n, id, name, model, newUrl) %}
+    <div class="col mb-2">
+        <div class="input-group">
+            <span class="input-group-prepend">
+                {% if model.codproveedor %}
+                    <a href="EditProveedor?code={{ model.codproveedor }}" target="_blank" class="btn btn-info">
+                        <i class="fas fa-user-cog fa-fw" aria-hidden="true"></i>
+                    </a>
+                {% else %}
+                    <a href="{{ newUrl }}" class="btn btn-success" title="{{ i18n.trans('new-supplier') }}">
+                        <i class="fas fa-user-plus fa-fw" aria-hidden="true"></i>
+                    </a>
+                {% endif %}
+            </span>
+            <input type="hidden" id="{{ id }}Autocomplete" name="{{ name }}" value="{{ model.codproveedor }}"/>
+            <input type="text" id="{{ id }}" value="{{ model.nombre | raw }}" class="form-control autocomplete-dc"
+                   data-field="{{ id }}" data-source="Proveedor" data-fieldcode="codproveedor" data-fieldtitle="nombre"
+                   placeholder="{{ i18n.trans('supplier') }}" autocomplete="off"/>
+        </div>
+    </div>
+{% endmacro %}
+
+{% macro statusSelect(model, view, i18n) %}
+    <div class="dropdown">
+        {% set status = model.getStatus() %}
+        {% if status.generadoc %}
+            <button class="btn btn-secondary" type="button">
+                <i class="{{ status.icon() }} fa-fw" aria-hidden="true"></i> {{ status.nombre }}
+            </button>
+        {% else %}
+            <button class="btn btn-secondary dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="{{ status.icon() }} fa-fw" aria-hidden="true"></i> {{ status.nombre }}
+            </button>
+            <div class="dropdown-menu dropdown-menu-right">
+                {% set showDocumentStitcher = false %}
+                {% for status in view.documentStatus %}
+                    {% if model.idestado == status.idestado %}
+                        <a class="dropdown-item active" href="#">
+                            <i class="{{ status.icon() }} fa-fw" aria-hidden="true"></i> {{ status.nombre }}
+                        </a>
+                    {% else %}
+                        <a class="dropdown-item" href="#" onclick="$('#doc_idestado').val('{{ status.idestado }}');
+                                businessDocViewSave();">
+                            {% if status.generadoc %}
+                                {% set showDocumentStitcher = true %}
+                            {% endif %}
+                            <i class="{{ status.icon() }} fa-fw" aria-hidden="true"></i> {{ status.nombre }}
+                        </a>
+                    {% endif %}
+                {% endfor %}
+                {% if model.exists() and showDocumentStitcher %}
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="DocumentStitcher?model={{ model.modelClassName() }}&codes={{ model.primaryColumnValue() }}">
+                        <i class="fas fa-magic fa-fw" aria-hidden="true"></i> {{ i18n.trans('group-or-split') }}
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}

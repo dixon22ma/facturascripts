@@ -40,13 +40,20 @@
     </column>
     <column>
         <name>fax</name>
-        <type>character varying(20)</type>
+        <type>character varying(30)</type>
+    </column>
+    <column>
+        <name>fechaalta</name>
+        <type>date</type>
     </column>
     <column>
         <name>idempresa</name>
         <type>serial</type>
         <null>NO</null>
-        <default>nextval('empresas_idempresa_seq'::regclass)</default>
+    </column>
+    <column>
+        <name>idlogo</name>
+        <type>integer</type>
     </column>
     <column>
         <name>nombre</name>
@@ -58,12 +65,21 @@
         <type>character varying(32)</type>
     </column>
     <column>
+        <name>observaciones</name>
+        <type>text</type>
+    </column>
+    <column>
+        <name>personafisica</name>
+        <type>boolean</type>
+        <default>true</default>
+    </column>
+    <column>
         <name>provincia</name>
         <type>character varying(100)</type>
     </column>
     <column>
-        <name>recequivalencia</name>
-        <type>boolean</type>
+        <name>regimeniva</name>
+        <type>character varying(20)</type>
     </column>
     <column>
         <name>telefono1</name>
@@ -74,23 +90,19 @@
         <type>character varying(30)</type>
     </column>
     <column>
+        <name>tipoidfiscal</name>
+        <type>character varying(25)</type>
+    </column>
+    <column>
         <name>web</name>
         <type>character varying(100)</type>
-    </column>
-    <column>
-        <name>fechaalta</name>
-        <type>date</type>
-    </column>
-    <column>
-        <name>observaciones</name>
-        <type>text</type>
-    </column>
-    <column>
-        <name>regimeniva</name>
-        <type>character varying(20)</type>
     </column>
     <constraint>
         <name>empresas_pkey</name>
         <type>PRIMARY KEY (idempresa)</type>
+    </constraint>
+    <constraint>
+        <name>ca_empresas_attached_files</name>
+        <type>FOREIGN KEY (idlogo) REFERENCES attached_files (idfile) ON DELETE SET NULL ON UPDATE CASCADE</type>
     </constraint>
 </table>

@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2017-2018  Carlos Garcia Gomez     <carlos@facturascripts.com>
+ * Copyright (C) 2017-2019  Carlos Garcia Gomez     <carlos@facturascripts.com>
  * Copyright (C) 2017       Francesc Pineda Segarra <francesc.pineda.segarra@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -11,26 +11,59 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 namespace FacturaScripts\Core\Model;
-
-use FacturaScripts\Core\Base\Utils;
 
 /**
  * A state associated with documents to distinguish them by groups.
  * For example: Earrings, Approved, ...
  *
  * @author Francesc Pineda Segarra <francesc.pìneda.segarra@gmail.com>
+ * @author Carlos García Gómez     <carlos@facturascripts.com>
  */
 class EstadoDocumento extends Base\ModelClass
 {
 
     use Base\ModelTrait;
+
+    /**
+     * True if this states must update product stock.
+     *
+     * @var int
+     */
+    public $actualizastock;
+
+    /**
+     *
+     * @var bool
+     */
+    public $bloquear;
+
+    /**
+     * If the state is editable or not.
+     *
+     * @var bool
+     */
+    public $editable;
+
+    /**
+     * Name of the document to generate when this state is selected.
+     *
+     * @var string
+     */
+    public $generadoc;
+
+    /**
+     * Icon of EstadoDocumento.
+     *
+     * @var string
+     */
+    public $icon;
 
     /**
      * Primary key.
@@ -47,20 +80,58 @@ class EstadoDocumento extends Base\ModelClass
     public $nombre;
 
     /**
-     * If the state is editable or not.
+     * Sets this state as default for tipodoc.
      *
      * @var bool
      */
-    public $editable;
+    public $predeterminado;
 
     /**
-     * Returns the name of the table that uses this model.
-     *
+     * Document type: custommer invoice, supplier order, etc...
+     * @var string
+     */
+    public $tipodoc;
+
+    /**
+     * Reset the values of all model properties.
+     */
+    public function clear()
+    {
+        parent::clear();
+        $this->actualizastock = 0;
+        $this->bloquear = false;
+        $this->editable = true;
+        $this->predeterminado = false;
+        $this->tipodoc = 'PedidoProveedor';
+    }
+
+    /**
+     * 
+     * @return boolean
+     */
+    public function delete()
+    {
+        if ($this->bloquear) {
+            $this->toolBox()->i18nLog()->warning('locked');
+            return false;
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * 
      * @return string
      */
-    public static function tableName()
+    public function icon(): string
     {
-        return 'estados_documentos';
+        if (!empty($this->icon)) {
+            return $this->icon;
+        } elseif (!empty($this->generadoc)) {
+            return 'fas fa-check';
+        }
+
+        return $this->editable ? 'fas fa-tag' : 'fas fa-lock';
     }
 
     /**
@@ -74,12 +145,39 @@ class EstadoDocumento extends Base\ModelClass
     }
 
     /**
-     * Reset the values of all model properties.
+     * 
+     * @return boolean
      */
-    public function clear()
+    public function save()
     {
-        parent::clear();
-        $this->editable = true;
+        if ($this->bloquear) {
+            $this->toolBox()->i18nLog()->warning('locked');
+            return false;
+        }
+
+        if (parent::save()) {
+            if ($this->predeterminado) {
+                $sql = "UPDATE " . static::tableName() . " SET predeterminado = false"
+                    . " WHERE predeterminado = true"
+                    . " AND tipodoc = " . self::$dataBase->var2str($this->tipodoc)
+                    . " AND idestado != " . self::$dataBase->var2str($this->idestado) . ";";
+                return self::$dataBase->exec($sql);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns the name of the table that uses this model.
+     *
+     * @return string
+     */
+    public static function tableName()
+    {
+        return 'estados_documentos';
     }
 
     /**
@@ -89,7 +187,24 @@ class EstadoDocumento extends Base\ModelClass
      */
     public function test()
     {
-        $this->nombre = Utils::noHtml($this->nombre);
-        return true;
+        $this->nombre = $this->toolBox()->utils()->noHtml($this->nombre);
+
+        if (empty($this->tipodoc) || empty($this->nombre)) {
+            return false;
+        }
+
+        return parent::test();
+    }
+
+    /**
+     * 
+     * @param string $type
+     * @param string $list
+     *
+     * @return string
+     */
+    public function url(string $type = 'auto', string $list = 'ListFormatoDocumento?activetab=List')
+    {
+        return parent::url($type, $list);
     }
 }
