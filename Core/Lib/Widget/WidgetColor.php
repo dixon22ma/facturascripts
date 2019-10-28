@@ -1,7 +1,7 @@
 <?php
 /**
  * This file is part of FacturaScripts
- * Copyright (C) 2013-2017 Carlos Garcia Gomez <carlos@facturascripts.com>
+ * Copyright (C) 2019 Carlos Garcia Gomez <carlos@facturascripts.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -16,41 +16,35 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-namespace FacturaScripts\Core\Lib;
+namespace FacturaScripts\Core\Lib\Widget;
 
 /**
- * This class centralizes all common method for VAT Regime.
+ * Description of WidgetColor
  *
- * @author Carlos García Gómez <carlos@facturascripts.com>
+ * @author Carlos Garcia Gomez <carlos@facturascripts.com>
  */
-class RegimenIVA
+class WidgetColor extends BaseWidget
 {
 
-    const TAX_SYSTEM_EXEMPT = 'Exento';
-    const TAX_SYSTEM_GENERAL = 'General';
-    const TAX_SYSTEM_SURCHARGE = 'Recargo';
-
     /**
-     * Returns all the available options
-     *
-     * @return array
+     * 
+     * @param array $data
      */
-    public static function all()
+    public function __construct($data)
     {
-        return [
-            self::TAX_SYSTEM_EXEMPT => 'Exento',
-            self::TAX_SYSTEM_GENERAL => 'General',
-            self::TAX_SYSTEM_SURCHARGE => 'Recargo de equivalencia'
-        ];
+        $data['icon'] = $data['icon'] ?? 'fas fa-palette';
+        parent::__construct($data);
     }
 
     /**
-     * Returns the default value
+     * 
+     * @param string $type
+     * @param string $extraClass
      *
      * @return string
      */
-    public static function defaultValue()
+    protected function inputHtml($type = 'color', $extraClass = ''): string
     {
-        return self::TAX_SYSTEM_GENERAL;
+        return parent::inputHtml($type, $extraClass);
     }
 }

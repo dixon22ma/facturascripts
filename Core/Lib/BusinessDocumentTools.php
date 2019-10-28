@@ -170,7 +170,7 @@ class BusinessDocumentTools
         $doc->total = round($doc->neto + $doc->totaliva + $doc->totalrecargo - $doc->totalirpf, (int) FS_NF0);
         $json = [
             'total' => $doc->total,
-            'lines' => $lines
+            'lines' => $lines,
         ];
 
         return json_encode($json);
@@ -226,11 +226,11 @@ class BusinessDocumentTools
     protected function loadRegimenIva($reg)
     {
         switch ($reg) {
-            case 'Exento':
+            case RegimenIVA::TAX_SYSTEM_EXEMPT:
                 $this->siniva = true;
                 break;
 
-            case 'Recargo':
+            case RegimenIVA::TAX_SYSTEM_SURCHARGE:
                 $this->recargo = true;
                 break;
         }
@@ -306,7 +306,7 @@ class BusinessDocumentTools
     {
         if (isset($fLine['cantidad']) && '' !== $fLine['cantidad']) {
             /// edit line
-            $newLine = $doc->getNewLine($fLine);
+            $newLine = $doc->getNewLine($fLine, ['actualizastock']);
         } elseif (isset($fLine['referencia']) && '' !== $fLine['referencia']) {
             /// new line with reference
             $newLine = $doc->getNewProductLine($fLine['referencia']);
@@ -314,7 +314,7 @@ class BusinessDocumentTools
         } else {
             /// new line without reference
             $newLine = $doc->getNewLine();
-            $newLine->descripcion = $fLine['descripcion'];
+            $newLine->descripcion = $fLine['descripcion'] ?? '';
             $this->recalculateFormLineTaxZones($newLine);
         }
 

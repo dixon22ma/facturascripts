@@ -52,7 +52,7 @@ class PresupuestoCliente extends Base\SalesDocument
     public function clear()
     {
         parent::clear();
-        $this->finoferta = date('d-m-Y', strtotime(date('d-m-Y') . ' +1 month'));
+        $this->finoferta = date(self::DATE_STYLE, strtotime(date(self::DATE_STYLE) . ' +1 month'));
     }
 
     /**
@@ -73,17 +73,17 @@ class PresupuestoCliente extends Base\SalesDocument
      * Returns a new line for this document.
      * 
      * @param array $data
+     * @param array $exclude
      * 
      * @return LineaPresupuesto
      */
-    public function getNewLine(array $data = [])
+    public function getNewLine(array $data = [], array $exclude = ['actualizastock', 'idlinea', 'idpresupuesto'])
     {
         $newLine = new LineaPresupuesto();
         $newLine->idpresupuesto = $this->idpresupuesto;
         $newLine->irpf = $this->irpf;
         $newLine->actualizastock = $this->getStatus()->actualizastock;
 
-        $exclude = ['actualizastock', 'idlinea', 'idpresupuesto'];
         $newLine->loadFromData($data, $exclude);
         return $newLine;
     }

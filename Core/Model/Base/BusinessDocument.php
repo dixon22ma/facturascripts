@@ -205,7 +205,7 @@ abstract class BusinessDocument extends ModelOnChangeClass
     /**
      * Returns a new line for this business document.
      */
-    abstract public function getNewLine(array $data = []);
+    abstract public function getNewLine(array $data = [], array $exclude = []);
 
     /**
      * Returns the subject of this document.
@@ -243,8 +243,8 @@ abstract class BusinessDocument extends ModelOnChangeClass
         $this->codalmacen = $appSettings->get('default', 'codalmacen');
         $this->codpago = $appSettings->get('default', 'codpago');
         $this->codserie = $appSettings->get('default', 'codserie');
-        $this->fecha = date('d-m-Y');
-        $this->hora = date('H:i:s');
+        $this->fecha = date(self::DATE_STYLE);
+        $this->hora = date(self::HOUR_STYLE);
         $this->idempresa = $appSettings->get('default', 'idempresa');
         $this->irpf = 0.0;
         $this->neto = 0.0;
@@ -290,6 +290,9 @@ abstract class BusinessDocument extends ModelOnChangeClass
             $newLine->pvpunitario = isset($this->tarifa) ? $this->tarifa->apply($variant->coste, $variant->precio) : $variant->precio;
             $newLine->recargo = $impuesto->recargo;
             $newLine->referencia = $variant->referencia;
+
+            /// allow extensions
+            $this->pipe('getNewProductLine', $newLine, $variant, $product);
         }
 
         return $newLine;
